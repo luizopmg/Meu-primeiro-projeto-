@@ -1,0 +1,19 @@
+name = "aranha-pay-per-crawl"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Para proteger um site que já está na Cloudflare, tire o "#" das linhas abaixo
+# e troque meusite.com pelo seu domínio:
+# routes = [
+#   { pattern = "meusite.com/*", zone_name = "meusite.com" }
+# ]
+
+[vars]
+DEFAULT_PRICE = "0.01"
+LOG_LEVEL = "info"
+CRAWLER_RULES = ""
+# Sem rota? Coloque aqui o endereço do site original e use o endereço workers.dev:
+ORIGIN_URL = ""
+
+[env.production]
+vars = { DEFAULT_PRICE = "0.01", LOG_LEVEL = "warn", CRAWLER_RULES = "", ORIGIN_URL = "" }

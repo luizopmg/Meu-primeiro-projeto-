@@ -1,6 +1,6 @@
 # Aranha Digital
 
-> App Android e script Python que mapeiam os links de um site público: visitam as páginas do mesmo site respeitando o robots.txt, medem status, tempo de resposta, títulos e descrições, e mostram um mapa interativo com uma aranha animada e um relatório de problemas (erros HTTP, links quebrados, páginas lentas). Também detecta o llms.txt de cada site rastreado.
+> App Android e script Python que mapeiam os links de um site público: visitam as páginas do mesmo site respeitando o robots.txt, medem status, tempo de resposta, títulos e descrições, e mostram um mapa interativo com uma aranha animada e um relatório de problemas (erros HTTP, links quebrados, páginas lentas). Também detecta o llms.txt de cada site rastreado e verifica como o site trata robôs de IA (robots.txt e respostas HTTP 402/403). Inclui um Cloudflare Worker Pay Per Crawl para o dono do site cobrar ou bloquear robôs de IA.
 
 O projeto é em português. A tela do app é uma única página HTML (web/viewer.html) carregada num WebView; o código Java só faz pedidos HTTP, abre e salva arquivos. O APK é compilado pelo GitHub Actions e publicado na aba Releases.
 
@@ -10,15 +10,21 @@ O projeto é em português. A tela do app é uma única página HTML (web/viewer
 - [MainActivity.java](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/app/src/main/java/br/aranhadigital/MainActivity.java): ponte "AranhaNative" entre a página e o Android (fetch HTTP com redirecionamentos, seletor de arquivos, salvar em Download/AranhaDigital, abrir links)
 - [python/crawler.py](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/python/crawler.py): o mesmo rastreador para PC ou Pydroid 3; gera mapa.json e relatorio.csv
 
+- [worker/src/index.ts](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/worker/src/index.ts): Cloudflare Worker que responde 402 (com crawler-price) ou 403 para robôs de IA e libera humanos; regras por robô em CRAWLER_RULES
+- [worker/src/crawlers.ts](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/worker/src/crawlers.ts): lista de robôs de IA reconhecidos pelo User-Agent
+
 ## Formato dos dados
 
 - [README.md](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/README.md): visão geral, como baixar o APK e as regras que o rastreador segue
-- mapa.json: objeto com site, generated_at, stats, llms_txt, nodes (id, url, title, status, depth, words, response_ms, links_in, …), edges (source, target), broken_links e blocked
+- mapa.json: objeto com site, generated_at, stats, llms_txt, ai_access (bots: name, company, robots, status, price, result), nodes (id, url, title, status, depth, words, response_ms, links_in, …), edges (source, target), broken_links e blocked
 
 ## Build
 
 - [.github/workflows/build-apk.yml](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/.github/workflows/build-apk.yml): compila com Gradle 8.9 e JDK 17 e publica AranhaDigital.apk em um Release
 - [build.sh](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/build.sh): copia web/viewer.html para app/src/main/assets/index.html
+
+- [worker/test/worker.test.mjs](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/worker/test/worker.test.mjs): testes do Worker (node --test)
+- [.github/workflows/deploy-worker.yml](https://github.com/luizopmg/Meu-primeiro-projeto-/blob/aranha-apk/.github/workflows/deploy-worker.yml): publica o Worker na Cloudflare sob demanda
 
 ## Opcional
 

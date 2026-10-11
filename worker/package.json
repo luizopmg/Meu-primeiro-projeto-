@@ -1,0 +1,21 @@
+{
+  "name": "aranha-pay-per-crawl-worker",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Cloudflare Worker que responde HTTP 402 (Pay Per Crawl) ou 403 para robôs de IA. Baseado em github.com/Josusanz/pay-per-crawl-worker (MIT).",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "build:test": "esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/worker.mjs",
+    "test": "npm run build:test && node --test test/worker.test.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240208.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.2",
+    "wrangler": "^3.35.0"
+  }
+}

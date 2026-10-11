@@ -30,6 +30,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -164,7 +167,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String version() {
-            return "2.0";
+            return "2.2";
         }
     }
 
@@ -205,6 +208,18 @@ public class MainActivity extends Activity {
             r.put("contentType", type == null ? "" : type);
             String ra = c.getHeaderField("Retry-After");
             r.put("retryAfter", ra == null ? "" : ra);
+            // todos os cabeçalhos, em minúsculas (ex.: crawler-price do protocolo HTTP 402)
+            JSONObject headers = new JSONObject();
+            for (Map.Entry<String, List<String>> h : c.getHeaderFields().entrySet()) {
+                if (h.getKey() == null || h.getValue() == null) continue;
+                StringBuilder v = new StringBuilder();
+                for (String part : h.getValue()) {
+                    if (v.length() > 0) v.append(", ");
+                    v.append(part);
+                }
+                headers.put(h.getKey().toLowerCase(Locale.ROOT), v.toString());
+            }
+            r.put("headers", headers);
 
             String lower = type == null ? "" : type.toLowerCase();
             boolean wantBody = lower.isEmpty() || lower.contains("html") || lower.contains("text") || lower.contains("xml");

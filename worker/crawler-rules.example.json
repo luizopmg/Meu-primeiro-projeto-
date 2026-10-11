@@ -1,0 +1,10 @@
+{
+  "default": "charge",
+  "defaultPrice": 0.01,
+  "crawlers": [
+    { "name": "Google-Extended", "action": "allow" },
+    { "name": "Bytespider", "action": "block" },
+    { "name": "GPTBot", "action": "charge", "price": 0.01 },
+    { "name": "ClaudeBot", "action": "charge", "price": 0.05 }
+  ]
+}

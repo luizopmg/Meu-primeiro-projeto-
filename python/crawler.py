@@ -46,6 +46,17 @@ SKIP_EXT = re.compile(
     r"avi|mov|mkv|webm|exe|apk|dmg|iso|docx?|xlsx?|pptx?|odt|csv|xml|json|css|js|woff2?|ttf|md|txt)$",
     re.I,
 )
+# Robôs de IA (mesma lista do worker/src/crawlers.ts). "token" = nome que só existe no robots.txt.
+AI_BOTS = [
+    ("GPTBot", "OpenAI", ""), ("ChatGPT-User", "OpenAI", ""), ("OAI-SearchBot", "OpenAI", ""),
+    ("ClaudeBot", "Anthropic", ""), ("Claude-User", "Anthropic", ""), ("Claude-SearchBot", "Anthropic", ""),
+    ("Google-Extended", "Google", "token"), ("GoogleOther", "Google", ""),
+    ("FacebookBot", "Meta", ""), ("Meta-ExternalAgent", "Meta", ""), ("Applebot-Extended", "Apple", "token"),
+    ("Amazonbot", "Amazon", ""), ("PerplexityBot", "Perplexity", ""), ("Perplexity-User", "Perplexity", ""),
+    ("MistralAI-User", "Mistral AI", ""), ("DuckAssistBot", "DuckDuckGo", ""), ("cohere-ai", "Cohere", ""),
+    ("Bytespider", "ByteDance", ""), ("CCBot", "Common Crawl", ""), ("AI2Bot", "Allen Institute", ""),
+    ("Diffbot", "Diffbot", ""),
+]
 TRACKING = re.compile(r"^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref|ref_src|igshid)$", re.I)
 
 
@@ -93,10 +104,17 @@ class Robots:
             self.parser.parse(r.text.splitlines())
             self.sitemaps = list(self.parser.site_maps() or [])
 
-    def can_fetch(self, url: str) -> bool:
+    def can_fetch(self, url: str, agent: str = USER_AGENT) -> bool:
         if self.deny_all:
             return False
-        return True if self.allow_all else self.parser.can_fetch(USER_AGENT, url)
+        return True if self.allow_all else self.parser.can_fetch(agent, url)
+
+    def has_group_for(self, agent: str) -> bool:
+        """True se o robots.txt tem um grupo "User-agent:" com esse nome (regra própria)."""
+        if self.allow_all or self.deny_all:
+            return False
+        a = agent.lower()
+        return any(a == ua.lower() for e in self.parser.entries for ua in e.useragents)
 
     def crawl_delay(self) -> float | None:
         if self.allow_all or self.deny_all:
@@ -108,7 +126,8 @@ class Robots:
 # ----------------------------------------------------------------------------- coleta
 class Crawler:
     def __init__(self, start: str, max_pages: int, max_depth: int, delay: float,
-                 links_per_page: int, keep_query: bool, use_sitemap: bool, use_llms: bool = False):
+                 links_per_page: int, keep_query: bool, use_sitemap: bool, use_llms: bool = False,
+                 test_ai: bool = False):
         self.start = normalize(start, keep_query)
         if not self.start:
             raise ValueError("Informe um endereço válido começando com http:// ou https://")
@@ -137,6 +156,8 @@ class Crawler:
         self.queued: set[str] = {self.start}
         self.blocked: set[str] = set()
         self._last_request = 0.0
+        self.test_ai = test_ai
+        self.ai: dict | None = None
         self.llms = self._read_llms(seed=use_llms)
         if use_sitemap:
             self._seed_sitemap()
@@ -151,12 +172,13 @@ class Crawler:
             time.sleep(pause)
         self._last_request = time.monotonic()
 
-    def _get(self, url: str, stream: bool = True):
+    def _get(self, url: str, stream: bool = True, ua: str | None = None):
         """GET educado: espera o intervalo e recua em 429/503 (até 2 novas tentativas)."""
         for attempt in range(3):
             self._wait()
             t0 = time.monotonic()
-            r = self.session.get(url, timeout=15, allow_redirects=True, stream=stream)
+            r = self.session.get(url, timeout=15, allow_redirects=True, stream=stream,
+                                 headers={"User-Agent": ua} if ua else None)
             r.elapsed_ms = round((time.monotonic() - t0) * 1000)
             if r.status_code not in (429, 503) or attempt == 2:
                 return r
@@ -241,6 +263,10 @@ class Crawler:
                 if not self.same_site(final):
                     page["error"] = "redireciona para outro site"
                     return page
+            if r.status_code == 402:  # Pay Per Crawl
+                page["crawler_price"] = r.headers.get("crawler-price", "")
+                page["error"] = "HTTP 402: cobra para robôs" + (f" ({page['crawler_price']})" if page["crawler_price"] else "")
+                return page
             if r.status_code >= 400:
                 page["error"] = f"HTTP {r.status_code}"
                 return page
@@ -337,9 +363,49 @@ class Crawler:
                         if target not in self.queued:
                             self.queued.add(target)
                             self.queue.append((target, depth + 1))
+            if self.pages:
+                self.ai = self.check_ai()
         except KeyboardInterrupt:
             print("\nInterrompido. Salvando o que já foi coletado...")
         return self.build()
+
+    # ---- robôs de IA
+    def check_ai(self) -> dict:
+        """Lê o robots.txt para cada robô de IA e, com --ia, testa a resposta do servidor (1 pedido por robô)."""
+        first = next(iter(self.pages.values()))
+        url = first["url"]
+        out = {"url": url, "tested": self.test_ai, "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "baseline_status": first["status"], "bots": []}
+        if self.test_ai:
+            print("\nTestando como o site recebe robôs de IA (1 pedido cada, identificado como teste, sem pagamento)...")
+        for name, company, kind in AI_BOTS:
+            ok = self.robots.can_fetch(url, name)
+            row = {"name": name, "company": company, "robots": "permitido" if ok else "bloqueado",
+                   "robots_specific": self.robots.has_group_for(name), "status": None, "price": "",
+                   "charged": "", "result": "", "note": ""}
+            if self.test_ai:
+                if kind == "token":
+                    row["result"], row["note"] = "só robots.txt", "Esse nome só existe no robots.txt; o robô visita com outro nome."
+                elif not ok:
+                    row["result"], row["note"] = "não testado", "O robots.txt pede para esse robô não entrar; não foi testado."
+                else:
+                    try:
+                        r = self._get(url, stream=False, ua=f"{name}/1.0 (teste de acesso feito pela AranhaDigital; sem pagamento)")
+                        row["status"] = r.status_code
+                        row["price"] = r.headers.get("crawler-price", "")
+                        row["charged"] = r.headers.get("crawler-charged", "")
+                        code = r.status_code
+                        row["result"] = ("cobra" if code == 402 else "bloqueia" if code in (401, 403) else
+                                         "limita" if code == 429 else "livre" if code < 400 else "erro")
+                        if code == 402:
+                            row["note"] = f"Pay Per Crawl: pede {row['price'] or 'pagamento'} por pedido."
+                    except requests.RequestException as exc:
+                        row["result"], row["note"] = "falhou", type(exc).__name__
+            if self.test_ai:
+                print(f"   {name:<20} {str(row['status'] or '---'):>4}  {row['result']}"
+                      + (f" ({row['price']})" if row["price"] else ""))
+            out["bots"].append(row)
+        return out
 
     # ---- monta o mapa
     def build(self) -> dict:
@@ -382,12 +448,12 @@ class Crawler:
                 "crawler": f"AranhaDigital {VERSION}",
                 "settings": {"max_pages": self.max_pages, "max_depth": self.max_depth, "delay": self.delay,
                              "keep_query": self.keep_query},
-                "stats": stats, "llms_txt": self.llms, "nodes": nodes, "edges": uniq, "broken_links": broken[:500],
+                "stats": stats, "llms_txt": self.llms, "ai_access": self.ai, "nodes": nodes, "edges": uniq, "broken_links": broken[:500],
                 "blocked": sorted(self.blocked)[:200]}
 
 
 # ----------------------------------------------------------------------------- saída
-CSV_COLS = ["url", "status", "depth", "page_title", "h1", "description", "words", "response_ms",
+CSV_COLS = ["url", "status", "crawler_price", "depth", "page_title", "h1", "description", "words", "response_ms",
             "size_kb", "links_in", "links_internal", "links_external", "images_no_alt",
             "lang", "canonical", "noindex", "requested_url", "error"]
 
@@ -409,6 +475,14 @@ def summary(result: dict):
           f"{s['blocked_by_robots']} bloqueadas pelo robots.txt")
     if s["avg_response_ms"] is not None:
         print(f" tempo médio de resposta: {s['avg_response_ms']} ms")
+    ai = result.get("ai_access") or {}
+    if ai.get("bots"):
+        b = ai["bots"]
+        line = f" robôs de IA: {sum(x['robots'] == 'bloqueado' for x in b)} de {len(b)} bloqueados no robots.txt"
+        if ai.get("tested"):
+            line += (f" · {sum(x['result'] == 'cobra' for x in b)} cobrados (402) · "
+                     f"{sum(x['result'] == 'bloqueia' for x in b)} barrados (403) · {sum(x['result'] == 'livre' for x in b)} livres")
+        print(line)
     lt = result.get("llms_txt") or {}
     print(f" llms.txt: {'encontrado — ' + (lt.get('title') or 'sem título') if lt.get('found') else 'não encontrado'}")
     print(f" sem título: {s['missing_title']} · sem descrição: {s['missing_description']} · "
@@ -448,6 +522,7 @@ def main():
     ap.add_argument("--keep-query", action="store_true", help="trata ?parametros como páginas diferentes")
     ap.add_argument("--sitemap", action="store_true", help="também usa o sitemap.xml para achar páginas")
     ap.add_argument("--llms", action="store_true", help="também segue os links do llms.txt do site")
+    ap.add_argument("--ia", action="store_true", help="testa como o servidor recebe robôs de IA (1 pedido por robô)")
     ap.add_argument("-o", "--out", default="mapa.json", help="arquivo JSON de saída")
     ap.add_argument("--csv", default="relatorio.csv", help="arquivo CSV de saída")
     a = ap.parse_args()
@@ -461,11 +536,12 @@ def main():
         a.max_depth = ask("Profundidade máxima", a.max_depth)
         a.sitemap = ask("Usar sitemap.xml? (s/n)", "n").lower().startswith("s")
         a.llms = ask("Seguir os links do llms.txt? (s/n)", "n").lower().startswith("s")
+        a.ia = ask("Testar como robôs de IA são recebidos? (s/n)", "n").lower().startswith("s")
 
     a.max_pages = max(1, min(a.max_pages, 2000))
     a.delay = max(0.5, a.delay)
     try:
-        crawler = Crawler(a.url, a.max_pages, a.max_depth, a.delay, a.links, a.keep_query, a.sitemap, a.llms)
+        crawler = Crawler(a.url, a.max_pages, a.max_depth, a.delay, a.links, a.keep_query, a.sitemap, a.llms, a.ia)
         if crawler.robots.deny_all:
             sys.exit("O robots.txt deste site nega acesso a robôs. Nada foi coletado.")
         if not crawler.robots.can_fetch(crawler.start):

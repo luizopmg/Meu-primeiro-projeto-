@@ -97,6 +97,12 @@ dl.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;margin:
 dl.kv dt{color:var(--mute)} dl.kv dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .desc{color:var(--ink);background:var(--panel2);border-left:2px solid var(--violet);padding:8px 10px;border-radius:0 8px 8px 0;font-size:12.5px;margin:10px 0}
 .empty{color:var(--mute);font-size:13px;padding:6px 0}
+.aitbl{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 8px;align-items:center;margin-top:8px}
+.aitbl .h{font:600 10.5px var(--f-mono);color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.aitbl .nm{min-width:0;display:flex;flex-direction:column}
+.aitbl .nm b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aitbl .nm small{font-size:10.5px;color:var(--mute)}
+.aitbl .chip{text-align:center;white-space:nowrap}
 .form{display:flex;flex-direction:column;gap:10px}
 .form label{font-size:12px;color:var(--mute);display:flex;flex-direction:column;gap:5px}
 .form input[type=url],.form select{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:10px 11px;font-size:15px;width:100%;color:var(--ink)}
@@ -260,7 +266,7 @@ function load(data, isDemo, live){
   const prevSel = live && sel ? keyOf(sel) : null;
   const broken = edges.filter(e => e.b.bad);
   G = {site:data.site || 'mapa importado', when:data.generated_at || '', nodes, edges, root, broken,
-       maxDepth: Math.max(...nodes.map(n => n.depth)), isDemo, stats:data.stats || null, llms:data.llms_txt, blocked:(data.blocked||[]).length || data.stats?.blocked_by_robots || 0};
+       maxDepth: Math.max(...nodes.map(n => n.depth)), isDemo, stats:data.stats || null, llms:data.llms_txt, ai:data.ai_access, blocked:(data.blocked||[]).length || data.stats?.blocked_by_robots || 0};
   if(live){
     alpha = Math.max(alpha, .35);
     if(!walk || !walk.live) walk = {live:true, tour:[], i:0, t:0, silk:new Set(), x:root.x, y:root.y, ang:0, phase:0, pause:0, visited:0, fade:1};
@@ -278,7 +284,8 @@ function load(data, isDemo, live){
 
 function issuesOf(n){
   const out = [];
-  if(n.status != null && n.status >= 400) out.push({lvl:'bad', txt:'Página responde com erro HTTP ' + n.status});
+  if(n.status === 402) out.push({lvl:'bad', txt:'Cobra para entrar (HTTP 402, Pay Per Crawl)' + (n.crawler_price ? ': ' + n.crawler_price + ' por pedido' : '')});
+  else if(n.status != null && n.status >= 400) out.push({lvl:'bad', txt:'Página responde com erro HTTP ' + n.status});
   else if(n.error) out.push({lvl:'bad', txt:'Falha na coleta: ' + n.error});
   if(!n.bad){
     if('page_title' in n && !n.page_title) out.push({lvl:'warn', txt:'Sem <title>'});
@@ -496,6 +503,12 @@ function frame(ts){
     if(camTarget){const e = follow ? .06 : .15; cam.x += (camTarget.x - cam.x) * e; cam.y += (camTarget.y - cam.y) * e; cam.k += (camTarget.k - cam.k) * e;
       if(!follow && Math.abs(camTarget.x - cam.x) < .5 && Math.abs(camTarget.k - cam.k) < .002) camTarget = null;}
     draw();
+  } else if(W){
+    // sem mapa ainda: a aranha espera no centro
+    walk = walk && !walk.tour ? walk : {x:0, y:0, ang:-Math.PI / 2, phase:0, fade:1};
+    if(!REDUCE) walk.phase += dt * .004;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H); ctx.translate(W / 2, H / 2 - 20); ctx.scale(2.2, 2.2);
+    drawSpider(1);
   }
   requestAnimationFrame(frame);
 }
@@ -512,7 +525,7 @@ cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId); lastTouch = Date.now(); const p = local(e); ptrs.set(e.pointerId, p); camTarget = null;
   if(follow) setFollow(false);
   if(ptrs.size === 2){const [a, b] = [...ptrs.values()]; gesture = {type:'pinch', d:Math.hypot(a.x - b.x, a.y - b.y), k:cam.k}; return;}
-  const n = hit(p.x, p.y);
+  const n = G ? hit(p.x, p.y) : null;
   gesture = {type:n ? 'node' : 'pan', node:n, sx:p.x, sy:p.y, lx:p.x, ly:p.y, moved:false};
   cv.classList.add('dragging');
 });
@@ -564,7 +577,7 @@ function renderPanel(){
   const pane = $('#pane'), keep = tab === 'rastrear' && pane.dataset.tab === tab ? pane.scrollTop : 0;
   pane.replaceChildren(); pane.dataset.tab = tab;
   if(tab === 'rastrear') renderCrawl(pane);
-  else if(!G) return;
+  else if(!G){pane.append(el('p', 'empty', 'Nenhum mapa ainda. Use a aba Rastrear para mapear um site.')); return;}
   else if(tab === 'resumo') renderSummary(pane);
   else if(tab === 'pagina') renderPage(pane);
   else renderProblems(pane);
@@ -583,6 +596,27 @@ function renderSummary(p){
   stat(avg == null ? '—' : fmt(avg) + ' ms', 'resposta média', avg > 800 ? 'warn' : '');
   stat(fmt(G.blocked), 'bloqueadas (robots.txt)');
   p.append(grid);
+  if(G.ai && G.ai.bots){
+    const b = G.ai.bots, nR = b.filter(x => x.robots === 'bloqueado').length;
+    p.append(el('h2', '', 'Robôs de IA'));
+    const sumTxt = nR + ' de ' + b.length + ' bloqueados no robots.txt' + (G.ai.tested
+      ? ' · ' + b.filter(x => x.result === 'cobra').length + ' cobrados (402) · ' + b.filter(x => x.result === 'bloqueia').length + ' barrados (403) · ' + b.filter(x => x.result === 'livre').length + ' entram livres'
+      : ' · resposta do servidor não testada');
+    p.append(el('div', 'when', sumTxt));
+    const tbl = el('div', 'aitbl');
+    tbl.append(el('span', 'h', 'Robô'), el('span', 'h', 'robots.txt'), el('span', 'h', 'Servidor'));
+    for(const x of b){
+      const nm = el('span', 'nm'); nm.append(el('b', '', x.name), el('small', '', x.company)); if(x.note) nm.title = x.note;
+      const rc = el('span', 'chip ' + (x.robots === 'bloqueado' ? 'bad' : 'ok'), x.robots === 'bloqueado' ? 'bloqueia' : 'permite');
+      const sv = x.result === 'cobra' ? el('span', 'chip warn', '402 ' + (x.price || 'cobra'))
+        : x.result === 'bloqueia' ? el('span', 'chip bad', (x.status || '') + ' bloqueia')
+        : x.result === 'livre' ? el('span', 'chip ok', (x.status || '') + ' livre')
+        : el('span', 'chip', x.result || '—');
+      tbl.append(nm, rc, sv);
+    }
+    p.append(tbl);
+    if(G.ai.tested) p.append(el('p', 'hint', 'Cada robô foi testado com um único pedido na página inicial, identificado como teste da Aranha Digital e sem enviar pagamento. Robôs bloqueados no robots.txt não foram testados.'));
+  }
   if(G.llms !== undefined){
     p.append(el('h2', '', 'llms.txt'));
     const box = el('div', 'desc');
@@ -709,17 +743,17 @@ const UA = 'AranhaDigital/2.0 (app Android; rastreador educacional; respeita rob
 const SKIP = /\.(jpe?g|png|gif|webp|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|tar|mp[34]|m4a|wav|ogg|avi|mov|mkv|webm|exe|apk|dmg|iso|docx?|xlsx?|pptx?|odt|csv|xml|json|css|js|woff2?|ttf|md|txt)$/i;
 const TRACK = /^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref|ref_src|igshid)$/i;
 const crawl = {running:false, stopReq:false, log:[], result:null, done:0, queueLeft:0, status:'',
-               opts:{url:'', pages:40, depth:3, sitemap:false, llms:false}};
+               opts:{url:'', pages:40, depth:3, sitemap:false, llms:false, ai:false}};
 try{const o = JSON.parse(localStorage.getItem('aranha:opts') || 'null'); if(o) Object.assign(crawl.opts, o);}catch(_){}
 
 const pending = new Map(); let reqSeq = 0;
 window.__aranhaDone = r => {const cb = pending.get(String(r.id)); if(cb){pending.delete(String(r.id)); cb(r);}};
-function nativeGet(url){
+function nativeGet(url, ua){
   return new Promise(res => {
     const id = String(++reqSeq);
     const timer = setTimeout(() => {pending.delete(id); res({ok:false, error:'tempo esgotado'});}, 40000);
     pending.set(id, r => {clearTimeout(timer); res(r);});
-    try{NATIVE.fetch(id, url, UA);}catch(e){pending.delete(id); clearTimeout(timer); res({ok:false, error:String(e.message || e)});}
+    try{NATIVE.fetch(id, url, ua || UA);}catch(e){pending.delete(id); clearTimeout(timer); res({ok:false, error:String(e.message || e)});}
   });
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -746,9 +780,13 @@ function parseRobots(txt){
     if(k === 'allow' || k === 'disallow'){if(v) cur.rules.push({allow:k === 'allow', path:v, re:robotsRe(v)});}
     else if(k === 'crawl-delay'){const d = parseFloat(v); if(!isNaN(d)) cur.delay = d;}
   }
-  const mine = groups.filter(g => g.agents.some(a => a !== '*' && 'aranhadigital'.includes(a)));
-  const chosen = mine.length ? mine : groups.filter(g => g.agents.includes('*'));
-  return {rules:chosen.flatMap(g => g.rules), delay:chosen.map(g => g.delay).find(d => d != null) ?? null, sitemaps};
+  const r = robotsFor({groups, sitemaps}, 'aranhadigital'); r.parsed = {groups, sitemaps}; return r;
+}
+/** Regras do robots.txt que valem para um robô específico (grupo com o nome dele, senão o grupo "*"). */
+function robotsFor(parsed, token){
+  const t = token.toLowerCase(), mine = parsed.groups.filter(g => g.agents.includes(t));
+  const chosen = mine.length ? mine : parsed.groups.filter(g => g.agents.includes('*'));
+  return {rules:chosen.flatMap(g => g.rules), delay:chosen.map(g => g.delay).find(d => d != null) ?? null, sitemaps:parsed.sitemaps, specific:mine.length > 0};
 }
 function robotsRe(p){
   const end = p.endsWith('$'); if(end) p = p.slice(0, -1);
@@ -763,13 +801,13 @@ function allowed(robots, url){
 }
 function decodeSafe(s){try{return decodeURIComponent(s);}catch(_){return s;}}
 
-async function politeGet(url, delayMs){
+async function politeGet(url, delayMs, ua){
   for(let attempt = 0; attempt < 3; attempt++){
     const wait = delayMs - (Date.now() - crawl.lastReq);
     if(wait > 0) await sleep(wait);
     if(crawl.stopReq) return null;
     crawl.lastReq = Date.now();
-    const r = await nativeGet(url);
+    const r = await nativeGet(url, ua);
     if(r.ok && (r.status === 429 || r.status === 503) && attempt < 2){
       const ra = parseInt(r.retryAfter, 10), w = Math.min(isNaN(ra) ? 5 * (attempt + 1) : ra, 60);
       logLine('warn', '…', 'Servidor pediu calma (' + r.status + '); esperando ' + w + ' s'); await sleep(w * 1000); continue;
@@ -785,6 +823,7 @@ function analyze(url, depth, r, same, keepQuery){
   page.status = r.status; page.response_ms = r.ms; page.content_type = (r.contentType || '').split(';')[0].trim();
   const final = norm(r.url || url, undefined, keepQuery);
   if(final && final !== url){page.redirected_to = final; if(!same(final)){page.error = 'redireciona para outro site'; return page;}}
+  if(r.status === 402){page.crawler_price = (r.headers || {})['crawler-price'] || ''; page.error = 'HTTP 402: cobra para robôs' + (page.crawler_price ? ' (' + page.crawler_price + ')' : ''); return page;}
   if(r.status >= 400){page.error = 'HTTP ' + r.status; return page;}
   if(!/html/i.test(page.content_type)){page.error = 'não é HTML'; return page;}
   page.size_kb = Math.round((r.bytes || 0) / 102.4) / 10;
@@ -826,6 +865,43 @@ function parseLlms(txt, url){
   return {found:true, url, title:first(/^#\s+/), summary:first(/^>\s?/), sections:lines.filter(l => /^##\s+/.test(l)).map(l => l.replace(/^##\s+/, '').trim()).slice(0, 30),
     links:links.slice(0, 500), size:txt.length};
 }
+// Robôs de IA conhecidos (mesma lista do worker/src/crawlers.ts). "token" = nome que só existe no robots.txt.
+const AI_BOTS = [
+  ['GPTBot', 'OpenAI'], ['ChatGPT-User', 'OpenAI'], ['OAI-SearchBot', 'OpenAI'],
+  ['ClaudeBot', 'Anthropic'], ['Claude-User', 'Anthropic'], ['Claude-SearchBot', 'Anthropic'],
+  ['Google-Extended', 'Google', 'token'], ['GoogleOther', 'Google'],
+  ['FacebookBot', 'Meta'], ['Meta-ExternalAgent', 'Meta'], ['Applebot-Extended', 'Apple', 'token'],
+  ['Amazonbot', 'Amazon'], ['PerplexityBot', 'Perplexity'], ['Perplexity-User', 'Perplexity'],
+  ['MistralAI-User', 'Mistral AI'], ['DuckAssistBot', 'DuckDuckGo'], ['cohere-ai', 'Cohere'],
+  ['Bytespider', 'ByteDance'], ['CCBot', 'Common Crawl'], ['AI2Bot', 'Allen Institute'], ['Diffbot', 'Diffbot']
+];
+/** Lê o robots.txt para cada robô de IA e, se pedido, testa a resposta do servidor na página inicial. */
+async function checkAI(robots, start, delayMs, testHttp, baseline){
+  const out = {url:start, tested:testHttp, checked_at:new Date().toISOString(), baseline_status:baseline ?? null, bots:[]};
+  for(const [name, company, kind] of AI_BOTS){
+    const rb = robotsFor(robots.parsed || {groups:[], sitemaps:[]}, name);
+    const ok = allowed(rb, start);
+    const row = {name, company, robots:ok ? 'permitido' : 'bloqueado', robots_specific:rb.specific, status:null, price:'', charged:'', result:'', note:''};
+    if(!testHttp){out.bots.push(row); continue;}
+    if(kind === 'token'){row.result = 'só robots.txt'; row.note = 'Esse nome só existe no robots.txt; o robô visita com outro nome.'; out.bots.push(row); continue;}
+    if(!ok){row.result = 'não testado'; row.note = 'O robots.txt pede para esse robô não entrar, então a aranha respeitou e não testou.'; out.bots.push(row); continue;}
+    if(crawl.stopReq) break;
+    crawl.status = 'Testando como o site recebe ' + name + '…'; refreshCrawl();
+    const r = await politeGet(start, delayMs, name + '/1.0 (teste de acesso feito pelo app AranhaDigital; sem pagamento)');
+    if(!r) break;
+    if(!r.ok){row.result = 'falhou'; row.note = r.error || 'sem resposta';}
+    else {
+      const h = r.headers || {};
+      row.status = r.status; row.price = h['crawler-price'] || ''; row.charged = h['crawler-charged'] || '';
+      row.result = r.status === 402 ? 'cobra' : (r.status === 401 || r.status === 403) ? 'bloqueia' : r.status === 429 ? 'limita' : r.status < 400 ? 'livre' : 'erro';
+      if(r.status === 402) row.note = 'Pay Per Crawl: pede ' + (row.price || 'pagamento') + ' por pedido.';
+    }
+    out.bots.push(row);
+    logLine(row.result === 'livre' ? 'ok' : row.result === 'cobra' ? 'warn' : 'bad', row.status || '—', name + ': ' + row.result + (row.price ? ' (' + row.price + ')' : ''));
+  }
+  return out;
+}
+
 function buildResult(st){
   const {start, pages, links, alias, blocked, queue, opts} = st, resolve = u => alias.get(u) || u;
   const ids = new Map([...pages.keys()].map((u, i) => [u, String(i)])), inbound = new Map([...pages.keys()].map(u => [u, 0]));
@@ -848,7 +924,7 @@ function buildResult(st){
       blocked_by_robots:blocked.size, avg_response_ms:times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null,
       missing_title:ok.filter(p => !p.title).length, missing_description:ok.filter(p => !p.description).length,
       broken_links:broken.length, queue_left:queue.length},
-    llms_txt:st.llms || null, nodes, edges, broken_links:broken.slice(0, 500), blocked:[...blocked].slice(0, 200)};
+    llms_txt:st.llms || null, ai_access:st.ai || null, nodes, edges, broken_links:broken.slice(0, 500), blocked:[...blocked].slice(0, 200)};
 }
 
 function logLine(kind, st, text, ms){
@@ -876,7 +952,7 @@ async function startCrawl(){
   if(crawl.stopReq){crawl.running = false; refreshCrawl(); return;}
   if(!rr.ok) return failCrawl('Não consegui acessar ' + origin + ' (' + rr.error + '). Confira a internet e o endereço.');
   if(rr.status === 401 || rr.status === 403) return failCrawl('O robots.txt deste site nega acesso a robôs. Nada foi coletado.');
-  const robots = rr.status >= 400 ? {rules:[], delay:null, sitemaps:[]} : parseRobots(rr.body || '');
+  const robots = rr.status >= 400 ? {rules:[], delay:null, sitemaps:[], parsed:{groups:[], sitemaps:[]}} : parseRobots(rr.body || '');
   logLine('info', 'robots', rr.status >= 400 ? 'Sem robots.txt: tudo liberado' : 'robots.txt lido: ' + robots.rules.length + ' regras');
   if(!allowed(robots, start)) return failCrawl('O robots.txt não permite rastrear a página inicial. Nada foi coletado.');
   const delayMs = Math.max(1500, (robots.delay || 0) * 1000);
@@ -937,6 +1013,13 @@ async function startCrawl(){
       crawl.result = buildResult(st);
       load(crawl.result, false, true);
     }
+    if(st.pages.size && !crawl.stopReq){
+      const base = st.pages.get(start) || [...st.pages.values()][0];
+      st.ai = await checkAI(robots, base.url, delayMs, !!opts.ai, base.status);
+      const b = st.ai.bots, blockedR = b.filter(x => x.robots === 'bloqueado').length;
+      logLine('info', 'IA', blockedR + ' de ' + b.length + ' robôs de IA bloqueados no robots.txt' + (opts.ai ? ' · ' + b.filter(x => x.result === 'cobra').length + ' cobrados (402) · ' + b.filter(x => x.result === 'bloqueia').length + ' barrados pelo servidor' : ''));
+      crawl.result = buildResult(st);
+    }
   }catch(e){logLine('bad', 'erro', 'Erro inesperado: ' + (e.message || e));}
 
   crawl.running = false; crawl.status = ''; crawl.queueLeft = st.queue.length;
@@ -952,7 +1035,7 @@ async function startCrawl(){
   refreshCrawl();
 }
 
-const CSV_COLS = ['url', 'status', 'depth', 'page_title', 'h1', 'description', 'words', 'response_ms', 'size_kb', 'links_in',
+const CSV_COLS = ['url', 'status', 'crawler_price', 'depth', 'page_title', 'h1', 'description', 'words', 'response_ms', 'size_kb', 'links_in',
   'links_internal', 'links_external', 'images_no_alt', 'lang', 'canonical', 'noindex', 'requested_url', 'error'];
 function toCSV(res){
   const q = v => {v = v == null ? '' : String(v); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;};
@@ -989,7 +1072,9 @@ function renderCrawl(p){
   il.onchange = () => crawl.opts.llms = il.checked; ll.append(il, 'Também seguir os links do llms.txt');
   const go = el('button', 'go' + (crawl.running ? ' stop' : ''), crawl.running ? (crawl.stopReq ? 'Parando…' : 'Parar') : 'Começar a rastrear');
   go.type = 'submit'; go.disabled = crawl.running && crawl.stopReq;
-  f.append(lu, row, lc, ll, go); p.append(f);
+  const la = el('label', 'check'), ia = el('input'); Object.assign(ia, {type:'checkbox', id:'c-ai', checked:!!crawl.opts.ai, disabled:crawl.running});
+  ia.onchange = () => crawl.opts.ai = ia.checked; la.append(ia, 'Testar como robôs de IA são recebidos (1 pedido por robô na página inicial)');
+  f.append(lu, row, lc, ll, la, go); p.append(f);
 
   if(crawl.running || crawl.done){
     const pr = el('div', 'prog'), bar = el('div'); bar.style.width = Math.min(100, crawl.done / crawl.opts.pages * 100) + '%'; pr.append(bar); p.append(pr);
@@ -1056,7 +1141,8 @@ function DEMO(){
 resize();
 let restored = false;
 try{const last = localStorage.getItem('aranha:last'); if(last){load(JSON.parse(last), false); restored = true;}}catch(_){}
-if(!restored) load(DEMO(), true);
+if(!restored && !NATIVE) load(DEMO(), true);
+if(NATIVE){$('#demoBtn').hidden = true; if(!restored){$('#demoTag').hidden = true; $('#ticker').textContent = 'Nenhum mapa ainda. Digite um site na aba Rastrear.';}}
 if(NATIVE){tab = 'rastrear'; renderPanel();}
 requestAnimationFrame(frame);
 if(REDUCE) $('#ticker').textContent = 'Animação pausada (seu sistema pede menos movimento). Toque em ▶ para iniciar.';

@@ -1,0 +1,25 @@
+name: Testar Worker
+
+on:
+  push:
+    paths: ['worker/**', '.github/workflows/worker.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --no-audit --no-fund
+      - name: Checar tipos (TypeScript + tipos da Cloudflare)
+        run: npx tsc --noEmit
+      - name: Testes de comportamento (402, 403, preços, regras)
+        run: npm test
+      - name: Simular publicação (sem enviar nada)
+        run: npx wrangler deploy --dry-run --outdir dist-dry
