@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Aranha Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: mapa em tela cheia à esquerda, painel de leitura à direita (vira folha inferior no celular).
+   Visual único escuro de propósito: a identidade neon da Aranha Digital original. */
+:root{
+  color-scheme:dark;
+  --bg:#05070d; --bg2:#0a1020; --panel:#0b101b; --panel2:#111827; --line:#1d2b3f; --line2:#2c4058;
+  --ink:#e2f4fa; --mute:#8b9db1; --dim:#5d6f84;
+  --aqua:#20f1df; --pink:#fc32aa; --violet:#8a8cff; --warn:#ffb547; --bad:#ff5470; --good:#3ee08f;
+  --f-display:"Chakra Petch","Rajdhani","Segoe UI",system-ui,sans-serif;
+  --f-body:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--f-body);overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--aqua);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:minmax(0,1fr) 360px;grid-template-rows:auto minmax(0,1fr);height:100%}
+header{grid-column:1/-1;display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;padding:10px 16px;
+  padding-top:calc(10px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--line);background:var(--bg)}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto;min-width:0}
+.brand h1{font:700 19px/1 var(--f-display);letter-spacing:.14em;margin:0;white-space:nowrap}
+.brand h1 span{color:var(--aqua)}
+.brand small{font:500 11px var(--f-mono);color:var(--mute);letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38vw}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:7px 11px;cursor:pointer;
+  font-weight:600;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:var(--ink)}
+.btn:hover{border-color:var(--aqua)}
+.btn.on{border-color:var(--aqua);color:var(--aqua)}
+.btn.primary{background:#06564f;border-color:#139b90}
+.btn kbd{font:600 11px var(--f-mono);color:var(--mute)}
+#file{display:none}
+.search{position:relative}
+.search input{width:180px;background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:7px 10px 7px 28px;font-size:12.5px}
+.search input::placeholder{color:var(--dim)}
+.search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--mute)}
+
+.stage{position:relative;min-width:0;min-height:0;background:radial-gradient(ellipse at 55% 40%,var(--bg2) 0%,var(--bg) 70%)}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;display:block}
+#cv.dragging{cursor:grabbing}
+.ticker{position:absolute;left:12px;right:12px;bottom:12px;display:flex;gap:10px;align-items:center;pointer-events:none;
+  font:12px var(--f-mono);color:var(--mute)}
+.ticker .pill{background:color-mix(in srgb,var(--bg) 82%,transparent);border:1px solid var(--line);border-radius:999px;padding:5px 11px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ticker b{color:var(--aqua);font-weight:600}
+.legend{position:absolute;left:12px;top:12px;display:flex;gap:10px;flex-wrap:wrap;font:11px var(--f-mono);color:var(--mute);pointer-events:none}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.demo-tag{position:absolute;right:12px;top:12px;font:600 10.5px var(--f-mono);letter-spacing:.1em;color:var(--warn);
+  border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:6px;padding:3px 7px;pointer-events:none}
+
+aside{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0;min-width:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:11px 6px;cursor:pointer;
+  font:600 12px var(--f-display);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--pink)}
+.tabs .count{font:600 10px var(--f-mono);background:var(--bad);color:#160308;border-radius:999px;padding:1px 6px;margin-left:5px;letter-spacing:0}
+.sheet-toggle{display:none}
+.pane{overflow:auto;padding:16px;flex:1;min-height:0}
+.pane h2{font:700 13px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:18px 0 8px}
+.pane h2:first-child{margin-top:0}
+.site{font:12px var(--f-mono);color:var(--aqua);overflow-wrap:anywhere}
+.when{font:11px var(--f-mono);color:var(--dim);margin-top:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.stat b{display:block;font:700 22px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--mute)}
+.stat.bad b{color:var(--bad)} .stat.warn b{color:var(--warn)}
+.bars{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:5px 10px;align-items:center;font:11.5px var(--f-mono);color:var(--mute)}
+.bars .track{height:10px;background:var(--panel2);border-radius:3px;overflow:hidden}
+.bars .fill{height:100%;border-radius:3px}
+.bars .n{color:var(--ink);font-variant-numeric:tabular-nums;text-align:right}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.list button{width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:7px 8px;cursor:pointer;display:flex;gap:10px;align-items:baseline;color:var(--ink)}
+.list button:hover{background:var(--panel2)}
+.list .k{font:600 11.5px var(--f-mono);color:var(--aqua);min-width:2.6em;text-align:right;font-variant-numeric:tabular-nums}
+.list .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.list .sev{width:8px;height:8px;border-radius:50%;flex:none;align-self:center}
+.list .why{display:block;font-size:11px;color:var(--mute);white-space:normal}
+
+.page-title{font:700 17px/1.25 var(--f-display);margin:0 0 6px;overflow-wrap:anywhere;text-wrap:balance}
+.url{font:12px var(--f-mono);color:var(--aqua);overflow-wrap:anywhere;text-decoration:none}
+.url:hover{text-decoration:underline}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.chip{font:600 11px var(--f-mono);border-radius:6px;padding:3px 7px;border:1px solid var(--line2);color:var(--mute)}
+.chip.ok{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,transparent)}
+.chip.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+dl.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;margin:0;font-size:12.5px}
+dl.kv dt{color:var(--mute)} dl.kv dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.desc{color:var(--ink);background:var(--panel2);border-left:2px solid var(--violet);padding:8px 10px;border-radius:0 8px 8px 0;font-size:12.5px;margin:10px 0}
+.empty{color:var(--mute);font-size:13px;padding:6px 0}
+.form{display:flex;flex-direction:column;gap:10px}
+.form label{font-size:12px;color:var(--mute);display:flex;flex-direction:column;gap:5px}
+.form input[type=url],.form select{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:10px 11px;font-size:15px;width:100%;color:var(--ink)}
+.form .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form .check{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:13px}
+.form .check input{width:18px;height:18px;accent-color:var(--aqua)}
+.go{background:#06564f;border:1px solid #139b90;border-radius:10px;padding:12px;font:700 14px var(--f-display);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;color:var(--ink)}
+.go.stop{background:#4a0f22;border-color:var(--bad)}
+.go:disabled{opacity:.5;cursor:default}
+.prog{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:12px}
+.prog div{height:100%;background:linear-gradient(90deg,var(--aqua),var(--pink));transition:width .3s}
+.progtxt{font:12px var(--f-mono);color:var(--mute);margin-top:6px;overflow-wrap:anywhere}
+.saves{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.log{list-style:none;margin:0;padding:0;font:11.5px var(--f-mono);display:flex;flex-direction:column;gap:3px}
+.log li{display:flex;gap:8px;align-items:baseline;min-width:0}
+.log .st{flex:none;min-width:3.2em;font-weight:600}
+.log .st.ok{color:var(--good)} .log .st.bad{color:var(--bad)} .log .st.warn{color:var(--warn)} .log .st.info{color:var(--violet)}
+.log .tx{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.log .ms{flex:none;color:var(--dim);margin-left:auto}
+.hint{color:var(--dim);font-size:11.5px;margin-top:14px}
+
+.drop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 85%,transparent);
+  border:2px dashed var(--aqua);font:700 18px var(--f-display);letter-spacing:.1em;color:var(--aqua)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;max-width:min(520px,calc(100% - 32px));
+  background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 8px 30px #0008}
+.toast.err{border-color:var(--bad)}
+
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+  header{padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top,0px))}
+  .brand small{display:none}
+  .search{order:5;flex:1 1 100%} .search input{width:100%}
+  .btn{padding:6px 9px} .btn .lbl{display:none}
+  aside{border-left:0;border-top:1px solid var(--line);height:44vh;padding-bottom:env(safe-area-inset-bottom,0px)}
+  aside.min{height:auto} aside.min .pane{display:none}
+  .sheet-toggle{display:block;flex:none;width:44px;background:none;border:0;border-bottom:2px solid transparent;color:var(--mute);cursor:pointer;font-size:14px}
+  .legend{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand"><h1>ARANHA <span>DIGITAL</span></h1><small id="siteLabel">mapa de links</small></div>
+    <div class="search"><svg viewBox="0 0 16 16" fill="none" stroke-width="2"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg>
+      <input id="q" type="search" placeholder="Buscar página ou URL" autocomplete="off" aria-label="Buscar página"></div>
+    <div class="tools">
+      <button class="btn primary" id="play" title="Pausar ou continuar a aranha (espaço)">⏸<span class="lbl">Pausar</span></button>
+      <button class="btn" id="speed" title="Velocidade da aranha">1×</button>
+      <button class="btn" id="follow" title="A câmera acompanha a aranha">◎<span class="lbl">Seguir</span></button>
+      <button class="btn" id="fit" title="Enquadrar o mapa inteiro (F)">⤢<span class="lbl">Enquadrar</span></button>
+      <label class="btn" for="file" title="Abrir um mapa.json gerado pelo crawler.py">⬆<span class="lbl">Abrir mapa.json</span></label>
+      <input id="file" type="file" accept=".json,application/json">
+      <button class="btn" id="demoBtn" title="Voltar ao mapa de demonstração">Demo</button>
+    </div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="cv" aria-label="Mapa interativo das páginas do site. Toque numa página para ver detalhes."></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="demo-tag" id="demoTag">DADOS DE EXEMPLO</div>
+    <div class="ticker"><div class="pill" id="ticker">Carregando…</div></div>
+  </div>
+
+  <aside id="aside">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="t-rastrear" aria-selected="false">Rastrear</button>
+      <button role="tab" id="t-resumo" aria-selected="true">Resumo</button>
+      <button role="tab" id="t-pagina" aria-selected="false">Página</button>
+      <button role="tab" id="t-prob" aria-selected="false">Problemas<span class="count" id="probCount" hidden></span></button>
+      <button class="sheet-toggle" id="sheet" aria-label="Recolher painel">▾</button>
+    </div>
+    <div class="pane" id="pane"></div>
+  </aside>
+</div>
+<div class="drop" id="drop" hidden>SOLTE O mapa.json AQUI</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d'), stage = $('#stage');
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const RING = 120;                 // distância entre anéis de profundidade
+const css = getComputedStyle(document.documentElement);
+const C = n => css.getPropertyValue('--' + n).trim();
+const COL = {aqua:C('aqua'),pink:C('pink'),violet:C('violet'),bad:C('bad'),warn:C('warn'),ink:C('ink'),mute:C('mute'),dim:C('dim'),line:C('line'),line2:C('line2'),bg:C('bg')};
+
+let W = 0, H = 0, DPR = 1;
+let G = null;                     // grafo carregado
+let cam = {x:0, y:0, k:1};
+let sel = null, hover = null, query = '', matches = new Set();
+let alpha = 0, running = !REDUCE, speed = 1, follow = false, tab = 'resumo';
+const NATIVE = window.AranhaNative || null;
+let lastLoaded = null;
+let walk = null, liveTarget = null, liveFrom = null, lastTouch = 0;
+
+/* ------------------------------------------------------------------ cores por profundidade */
+function hex(h){h=h.replace('#','');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16))}
+function mix(a,b,t){const A=hex(a),B=hex(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')'}
+function depthColor(d){
+  if(d<=0) return COL.aqua;
+  if(d===1) return mix(COL.aqua,COL.violet,.55);
+  if(d===2) return COL.violet;
+  if(d===3) return mix(COL.violet,COL.pink,.55);
+  return COL.pink;
+}
+
+/* ------------------------------------------------------------------ carregar dados */
+function load(data, isDemo, live){
+  if(!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges))
+    throw Error('o arquivo precisa ter as listas "nodes" e "edges", como o mapa.json gerado pelo crawler.py.');
+  if(!data.nodes.length) throw Error('o mapa está vazio: nenhuma página foi coletada.');
+  const byId = new Map();
+  const nodes = data.nodes.slice(0, 1500).map((n, i) => {
+    const o = {...n, id:String(n.id ?? i), i, inN:[], outN:[], x:0, y:0, vx:0, vy:0, fixed:false, seen:false};
+    o.title = String(n.title || n.page_title || n.h1 || n.url || o.id).trim();
+    o.status = n.status == null ? null : Number(n.status);
+    byId.set(o.id, o); return o;
+  });
+  const edges = [], keys = new Set();
+  for(const e of data.edges){
+    const a = byId.get(String(e.source)), b = byId.get(String(e.target));
+    if(!a || !b || a === b) continue;
+    const k = a.id + '>' + b.id; if(keys.has(k)) continue; keys.add(k);
+    edges.push({a, b}); a.outN.push(b); b.inN.push(a);
+    if(edges.length >= 8000) break;
+  }
+  lastLoaded = data;
+  const root = nodes.find(n => n.depth === 0) || nodes[0];
+  // profundidade: usa a do arquivo; se faltar, calcula por cliques a partir da raiz
+  if(nodes.some(n => typeof n.depth !== 'number')){
+    nodes.forEach(n => n.depth = Infinity); root.depth = 0;
+    const q = [root];
+    while(q.length){const n = q.shift(); for(const m of n.outN) if(m.depth === Infinity){m.depth = n.depth + 1; q.push(m);}}
+    const mx = Math.max(0, ...nodes.filter(n => n.depth !== Infinity).map(n => n.depth));
+    nodes.forEach(n => {if(n.depth === Infinity) n.depth = mx + 1;});
+  }
+  for(const n of nodes){
+    n.lin = n.inN.length; n.lout = n.outN.length;
+    n.bad = !!n.error || (n.status != null && n.status >= 400);
+    n.r = 5 + Math.sqrt(n.lin) * 2.3;
+    n.issues = issuesOf(n);
+  }
+  // posição inicial: anéis por profundidade, ângulo áureo
+  const perDepth = {};
+  nodes.forEach(n => {(perDepth[n.depth] ||= []).push(n);});
+  for(const [d, list] of Object.entries(perDepth)){
+    list.forEach((n, j) => {const a = j * 2.39996 + d * .7; const r = d * RING + (d ? (j % 3) * 14 : 0);
+      n.x = Math.cos(a) * r + (d == 0 ? 0 : 0); n.y = Math.sin(a) * r;});
+  }
+  const keyOf = n => n.url || n.id;
+  const prev = live && G ? new Map(G.nodes.map(n => [keyOf(n), n])) : null;
+  if(prev) for(const n of nodes){
+    const o = prev.get(keyOf(n));
+    if(o){n.x = o.x; n.y = o.y; n.seen = o.seen; continue;}
+    const par = n.inN.map(m => prev.get(keyOf(m))).find(Boolean);
+    if(par){n.x = par.x + (Math.random() - .5) * 50; n.y = par.y + (Math.random() - .5) * 50;}
+  }
+  const prevSel = live && sel ? keyOf(sel) : null;
+  const broken = edges.filter(e => e.b.bad);
+  G = {site:data.site || 'mapa importado', when:data.generated_at || '', nodes, edges, root, broken,
+       maxDepth: Math.max(...nodes.map(n => n.depth)), isDemo, stats:data.stats || null, blocked:(data.blocked||[]).length || data.stats?.blocked_by_robots || 0};
+  if(live){
+    alpha = Math.max(alpha, .35);
+    if(!walk || !walk.live) walk = {live:true, tour:[], i:0, t:0, silk:new Set(), x:root.x, y:root.y, ang:0, phase:0, pause:0, visited:0, fade:1};
+  } else {
+    for(let i = 0; i < 120; i++) tick(1 - i / 160); // pré-aquecimento: o mapa já abre arrumado
+    alpha = .5; walk = makeWalk(G);
+  }
+  sel = prevSel ? nodes.find(n => keyOf(n) === prevSel) || null : null; hover = null; setQuery($('#q').value);
+  $('#siteLabel').textContent = G.site;
+  $('#demoTag').hidden = !isDemo;
+  renderLegend();
+  if(!live || nodes.length <= 2) fit(true); else if(Date.now() - lastTouch > 5000 && !follow) fit();
+  renderPanel(); updateProbCount();
+}
+
+function issuesOf(n){
+  const out = [];
+  if(n.status != null && n.status >= 400) out.push({lvl:'bad', txt:'Página responde com erro HTTP ' + n.status});
+  else if(n.error) out.push({lvl:'bad', txt:'Falha na coleta: ' + n.error});
+  if(!n.bad){
+    if('page_title' in n && !n.page_title) out.push({lvl:'warn', txt:'Sem <title>'});
+    if('description' in n && !n.description) out.push({lvl:'warn', txt:'Sem meta descrição'});
+    if(n.response_ms > 1000) out.push({lvl:'warn', txt:'Lenta: ' + fmt(n.response_ms) + ' ms para responder'});
+    if(typeof n.words === 'number' && n.words < 80) out.push({lvl:'warn', txt:'Pouco texto (' + n.words + ' palavras)'});
+    if(n.images_no_alt > 0) out.push({lvl:'info', txt:n.images_no_alt + (n.images_no_alt > 1 ? ' imagens' : ' imagem') + ' sem texto alternativo'});
+    if(n.noindex) out.push({lvl:'info', txt:'Marcada como noindex (não aparece em buscadores)'});
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ simulação de forças */
+function tick(a){
+  const N = G.nodes, cell = 90, grid = new Map();
+  for(const n of N){const k = Math.floor(n.x / cell) + ',' + Math.floor(n.y / cell); let b = grid.get(k); if(!b) grid.set(k, b = []); b.push(n);}
+  for(const n of N){
+    const cx = Math.floor(n.x / cell), cy = Math.floor(n.y / cell);
+    for(let dx = -2; dx <= 2; dx++) for(let dy = -2; dy <= 2; dy++){
+      const b = grid.get((cx + dx) + ',' + (cy + dy)); if(!b) continue;
+      for(const m of b){ if(m.i <= n.i) continue;
+        let x = n.x - m.x, y = n.y - m.y, d2 = x * x + y * y;
+        if(d2 < .01){x = Math.random() - .5; y = Math.random() - .5; d2 = .5;}
+        const min = n.r + m.r + 26;
+        const f = 900 * a / d2 + (d2 < min * min ? (min - Math.sqrt(d2)) * .25 : 0);
+        const d = Math.sqrt(d2); x /= d; y /= d;
+        n.vx += x * f; n.vy += y * f; m.vx -= x * f; m.vy -= y * f;
+      }
+    }
+  }
+  for(const {a:s, b:t} of G.edges){
+    const x = t.x - s.x, y = t.y - s.y, d = Math.sqrt(x * x + y * y) || 1;
+    const same = s.depth === t.depth, L = same ? 70 : RING * .8;
+    const f = (d - L) * .006 * a / Math.max(1, Math.sqrt(Math.min(s.lout, t.lin) || 1));
+    s.vx += x / d * f; s.vy += y / d * f; t.vx -= x / d * f; t.vy -= y / d * f;
+  }
+  for(const n of N){
+    const r = Math.hypot(n.x, n.y) || 1, target = n.depth * RING;
+    const f = (target - r) * .08 * Math.max(a, .2);
+    n.vx += n.x / r * f; n.vy += n.y / r * f;
+    if(n.depth === 0){n.vx -= n.x * .1; n.vy -= n.y * .1;}
+    if(n.fixed){n.vx = n.vy = 0; continue;}
+    n.vx *= .55; n.vy *= .55;
+    const sp = Math.hypot(n.vx, n.vy); if(sp > 30){n.vx *= 30 / sp; n.vy *= 30 / sp;}
+    n.x += n.vx; n.y += n.vy;
+  }
+}
+
+/* ------------------------------------------------------------------ caminho da aranha
+   Árvore de busca em largura a partir da página inicial; a aranha percorre essa árvore
+   indo e voltando pelos fios (passeio de Euler), então nunca "teleporta" dentro do site. */
+function makeWalk(g){
+  const children = new Map(g.nodes.map(n => [n, []])), seen = new Set();
+  const roots = [];
+  const bfs = r => {roots.push(r); seen.add(r); const q = [r];
+    while(q.length){const n = q.shift(); for(const m of [...n.outN, ...n.inN]) if(!seen.has(m)){seen.add(m); children.get(n).push(m); q.push(m);}}};
+  bfs(g.root); for(const n of g.nodes) if(!seen.has(n)) bfs(n);
+  const tour = [];
+  for(const r of roots){
+    tour.push({n:r, jump:tour.length > 0, first:true});
+    const st = [[r, 0]];
+    while(st.length){
+      const top = st[st.length - 1], ch = children.get(top[0]);
+      if(top[1] < ch.length){const c = ch[top[1]++]; tour.push({n:c, from:top[0], first:true}); st.push([c, 0]);}
+      else {st.pop(); if(st.length) tour.push({n:st[st.length - 1][0], from:top[0], back:true});}
+    }
+  }
+  return {tour, i:0, t:0, silk:new Set(), x:g.root.x, y:g.root.y, ang:0, phase:0, pause:0, visited:0, fade:1};
+}
+function advanceWalk(dt){
+  const w = walk, T = w.tour;
+  if(w.live){
+    const tgt = liveTarget && G.nodes.find(n => n.url === liveTarget); if(!tgt) return;
+    const dx = tgt.x - w.x, dy = tgt.y - w.y, d = Math.hypot(dx, dy);
+    if(d > .5){const st = Math.min(d, dt * .3 * speed); w.x += dx / d * st; w.y += dy / d * st; w.ang = Math.atan2(dy, dx); w.phase += dt * .018 * Math.min(speed, 3);}
+    if(d - Math.min(d, dt * .3 * speed) < 1 && !tgt.seen){
+      tgt.seen = true; w.visited++; onArrive(tgt);
+      const from = liveFrom && G.nodes.find(n => n.url === liveFrom); if(from) w.silk.add(from.id + '>' + tgt.id);
+    }
+    return;
+  }
+  if(T.length < 2){const n = T[0].n; w.x = n.x; w.y = n.y; if(!n.seen){n.seen = true; w.visited = 1; onArrive(n);} return;}
+  if(w.pause > 0){w.pause -= dt; if(w.pause <= 0) resetWalk(); return;}
+  const cur = T[w.i], nxt = T[w.i + 1];
+  if(!nxt){w.pause = 1800; return;}
+  if(nxt.jump){w.fade = Math.max(0, w.fade - dt / 250); if(w.fade === 0){w.i++; w.t = 0; arrive(T[w.i]);} else {w.x = cur.n.x; w.y = cur.n.y;} return;}
+  w.fade = Math.min(1, w.fade + dt / 250);
+  const a = cur.n, b = nxt.n, len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const pxPerMs = (nxt.back ? .32 : .16) * speed;
+  w.t += dt * pxPerMs / len;
+  const p = Math.min(1, w.t), e = p * p * (3 - 2 * p);
+  w.x = a.x + (b.x - a.x) * e; w.y = a.y + (b.y - a.y) * e;
+  w.ang = Math.atan2(b.y - a.y, b.x - a.x);
+  w.phase += dt * .018 * Math.min(speed, 3);
+  if(w.t >= 1){w.i++; w.t = 0; arrive(nxt);}
+}
+function arrive(step){
+  const w = walk, n = step.n;
+  if(step.from && !step.back) w.silk.add(step.from.id + '>' + n.id);
+  if(!n.seen){n.seen = true; w.visited++; onArrive(n);}
+}
+function resetWalk(){walk.i = 0; walk.t = 0; walk.silk.clear(); walk.visited = 0; G.nodes.forEach(n => n.seen = false); arrive(walk.tour[0]);}
+function onArrive(n){
+  const t = $('#ticker'); t.textContent = '';
+  const b = document.createElement('b'); b.textContent = walk.visited + '/' + G.nodes.length;
+  t.append(b, ' · prof. ' + n.depth + ' · ' + n.title);
+}
+
+/* ------------------------------------------------------------------ câmera */
+function resize(){
+  const r = stage.getBoundingClientRect(); DPR = Math.min(2, devicePixelRatio || 1);
+  W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+}
+function toWorld(sx, sy){return {x:(sx - W / 2 - cam.x) / cam.k, y:(sy - H / 2 - cam.y) / cam.k};}
+function fit(instant){
+  if(!G) return; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for(const n of G.nodes){x0 = Math.min(x0, n.x - n.r); y0 = Math.min(y0, n.y - n.r); x1 = Math.max(x1, n.x + n.r); y1 = Math.max(y1, n.y + n.r);}
+  const k = Math.max(.15, Math.min(2.2, Math.min((W - 60) / (x1 - x0 || 1), (H - 90) / (y1 - y0 || 1))));
+  const target = {k, x:-(x0 + x1) / 2 * k, y:-(y0 + y1) / 2 * k};
+  if(instant) cam = target; else camTarget = target;
+}
+let camTarget = null;
+function zoomAt(sx, sy, factor){
+  const p = toWorld(sx, sy), k = Math.max(.1, Math.min(6, cam.k * factor));
+  cam.x = sx - W / 2 - p.x * k; cam.y = sy - H / 2 - p.y * k; cam.k = k; camTarget = null;
+}
+function focusNode(n){camTarget = {k:Math.max(cam.k, 1.3), x:-n.x * Math.max(cam.k, 1.3), y:-n.y * Math.max(cam.k, 1.3)};}
+
+/* ------------------------------------------------------------------ desenho */
+function related(n){return !sel || n === sel || sel.inN.includes(n) || sel.outN.includes(n);}
+function draw(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+  ctx.translate(W / 2 + cam.x, H / 2 + cam.y); ctx.scale(cam.k, cam.k);
+  const px = 1 / cam.k;
+  // anéis de profundidade
+  ctx.setLineDash([3 * px, 6 * px]); ctx.lineWidth = px; ctx.strokeStyle = COL.line;
+  ctx.font = `${10 * px}px ${css.getPropertyValue('--f-mono')}`; ctx.fillStyle = COL.dim; ctx.textAlign = 'left';
+  for(let d = 1; d <= G.maxDepth; d++){ctx.beginPath(); ctx.arc(0, 0, d * RING, 0, Math.PI * 2); ctx.stroke(); if(RING * cam.k > 70) ctx.fillText('prof. ' + d, d * RING + 4 * px, -4 * px);}
+  ctx.setLineDash([]);
+  // fios
+  ctx.lineWidth = px; ctx.strokeStyle = sel ? 'rgba(80,110,150,.10)' : 'rgba(80,120,170,.22)';
+  ctx.beginPath(); for(const {a, b} of G.edges){ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);} ctx.stroke();
+  // seda já percorrida pela aranha
+  ctx.strokeStyle = 'rgba(32,241,223,.45)'; ctx.lineWidth = 1.6 * px; ctx.beginPath();
+  for(const {a, b} of G.edges) if(walk.silk.has(a.id + '>' + b.id) || walk.silk.has(b.id + '>' + a.id)){ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);}
+  ctx.stroke();
+  // ligações da página selecionada: entrada aqua, saída rosa
+  if(sel){
+    ctx.lineWidth = 1.8 * px;
+    ctx.strokeStyle = COL.aqua; ctx.beginPath(); for(const m of sel.inN){ctx.moveTo(m.x, m.y); ctx.lineTo(sel.x, sel.y);} ctx.stroke();
+    ctx.strokeStyle = COL.pink; ctx.beginPath(); for(const m of sel.outN){ctx.moveTo(sel.x, sel.y); ctx.lineTo(m.x, m.y);} ctx.stroke();
+    for(const m of sel.outN) arrow(sel, m, COL.pink, px);
+  }
+  // páginas
+  for(const n of G.nodes){
+    const dimmed = (sel && !related(n)) || (query && !matches.has(n));
+    ctx.globalAlpha = dimmed ? .18 : 1;
+    const col = n.bad ? COL.bad : depthColor(n.depth);
+    if(n.seen && !n.bad){ctx.fillStyle = col; ctx.globalAlpha *= .16; ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 6, 0, 7); ctx.fill(); ctx.globalAlpha = dimmed ? .18 : 1;}
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 7);
+    ctx.fillStyle = n.seen || n.bad ? col : COL.bg; ctx.fill();
+    ctx.lineWidth = 1.6 * px; ctx.strokeStyle = col; ctx.stroke();
+    if(n.bad){ctx.strokeStyle = COL.bg; ctx.lineWidth = 1.8 * px; const s = n.r * .45; ctx.beginPath(); ctx.moveTo(n.x - s, n.y - s); ctx.lineTo(n.x + s, n.y + s); ctx.moveTo(n.x + s, n.y - s); ctx.lineTo(n.x - s, n.y + s); ctx.stroke();}
+    else if(n.issues.some(i => i.lvl === 'warn')){ctx.fillStyle = COL.warn; ctx.beginPath(); ctx.arc(n.x + n.r * .75, n.y - n.r * .75, 2.6 * Math.max(px, .6), 0, 7); ctx.fill();}
+    if(n === sel || n === hover || (query && matches.has(n))){ctx.strokeStyle = COL.ink; ctx.lineWidth = 2 * px; ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 4 * px + 2, 0, 7); ctx.stroke();}
+  }
+  ctx.globalAlpha = 1;
+  // rótulos: os mais linkados sempre, todos quando der zoom
+  const showAll = cam.k > 1.35, labelMin = cam.k < .8 ? Infinity : G.nodes.length > 60 ? 6 : 3;
+  ctx.font = `600 ${11.5 * px}px ${css.getPropertyValue('--f-body')}`; ctx.textAlign = 'center';
+  for(const n of G.nodes){
+    const forced = n === sel || n === hover || n === G.root || (query && matches.has(n));
+    if(!forced && !(showAll && related(n)) && !(n.lin >= labelMin && !sel && !query)) continue;
+    const t = n.title.length > 34 ? n.title.slice(0, 33) + '…' : n.title;
+    const y = n.y + n.r + 13 * px;
+    ctx.lineWidth = 3.5 * px; ctx.strokeStyle = COL.bg; ctx.strokeText(t, n.x, y);
+    ctx.fillStyle = forced ? COL.ink : COL.mute; ctx.fillText(t, n.x, y);
+  }
+  drawSpider(px);
+}
+function arrow(a, b, col, px){
+  const ang = Math.atan2(b.y - a.y, b.x - a.x), x = b.x - Math.cos(ang) * (b.r + 3 * px), y = b.y - Math.sin(ang) * (b.r + 3 * px), s = 6 * px;
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.cos(ang - .45) * s, y - Math.sin(ang - .45) * s); ctx.lineTo(x - Math.cos(ang + .45) * s, y - Math.sin(ang + .45) * s); ctx.fill();
+}
+function drawSpider(px){
+  const w = walk, s = 15 * Math.max(.7, Math.min(2, px * 1.1));
+  ctx.save(); ctx.globalAlpha = w.fade; ctx.translate(w.x, w.y); ctx.rotate(w.ang + Math.PI / 2); ctx.scale(s / 10, s / 10);
+  ctx.shadowColor = COL.aqua; ctx.shadowBlur = 10;
+  ctx.strokeStyle = COL.aqua; ctx.lineWidth = 1.1; ctx.lineCap = 'round';
+  for(const side of [-1, 1]) for(let i = 0; i < 4; i++){
+    const sw = Math.sin(w.phase + i * 1.6 + (side > 0 ? Math.PI : 0)) * .28;
+    const base = -1.0 + i * .62 + sw;
+    const kx = side * Math.cos(base) * 7, ky = Math.sin(base) * 7 - 1;
+    const fx = side * Math.cos(base * 1.15) * 13, fy = Math.sin(base * 1.15) * 13 + (i < 2 ? -3 : 3);
+    ctx.beginPath(); ctx.moveTo(0, i * .9 - 1); ctx.lineTo(kx, ky - 2.5); ctx.lineTo(fx, fy); ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#0de2d5'; ctx.strokeStyle = '#e5fffe'; ctx.lineWidth = .6;
+  ctx.beginPath(); ctx.ellipse(0, 4, 4.6, 5.8, 0, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#05121b'; ctx.strokeStyle = COL.aqua; ctx.lineWidth = .9;
+  ctx.beginPath(); ctx.arc(0, -3.2, 3.4, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COL.pink; ctx.beginPath(); ctx.arc(-1.3, -4.2, .85, 0, 7); ctx.arc(1.3, -4.2, .85, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ laço */
+let last = 0;
+function frame(ts){
+  const dt = Math.min(64, ts - (last || ts)); last = ts;
+  if(G){
+    if(alpha > .02){tick(alpha); alpha *= .985;}
+    if(running) advanceWalk(dt);
+    else if(walk.tour.length){const st = walk.tour[walk.i]; if(walk.t === 0 && st){walk.x = st.n.x; walk.y = st.n.y;}}
+    if(follow && running){camTarget = {k:Math.max(cam.k, 1.1), x:-walk.x * Math.max(cam.k, 1.1), y:-walk.y * Math.max(cam.k, 1.1)};}
+    if(camTarget){const e = follow ? .06 : .15; cam.x += (camTarget.x - cam.x) * e; cam.y += (camTarget.y - cam.y) * e; cam.k += (camTarget.k - cam.k) * e;
+      if(!follow && Math.abs(camTarget.x - cam.x) < .5 && Math.abs(camTarget.k - cam.k) < .002) camTarget = null;}
+    draw();
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ------------------------------------------------------------------ toque, mouse, roda */
+const ptrs = new Map(); let gesture = null;
+function hit(sx, sy){
+  const p = toWorld(sx, sy); let best = null, bd = Infinity;
+  for(const n of G.nodes){const d = Math.hypot(n.x - p.x, n.y - p.y) - n.r; if(d < bd){bd = d; best = n;}}
+  return bd < 10 / cam.k ? best : null;
+}
+function local(e){const r = cv.getBoundingClientRect(); return {x:e.clientX - r.left, y:e.clientY - r.top};}
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId); lastTouch = Date.now(); const p = local(e); ptrs.set(e.pointerId, p); camTarget = null;
+  if(follow) setFollow(false);
+  if(ptrs.size === 2){const [a, b] = [...ptrs.values()]; gesture = {type:'pinch', d:Math.hypot(a.x - b.x, a.y - b.y), k:cam.k}; return;}
+  const n = hit(p.x, p.y);
+  gesture = {type:n ? 'node' : 'pan', node:n, sx:p.x, sy:p.y, lx:p.x, ly:p.y, moved:false};
+  cv.classList.add('dragging');
+});
+cv.addEventListener('pointermove', e => {
+  const p = local(e);
+  if(!ptrs.has(e.pointerId)){const h = G && hit(p.x, p.y); if(h !== hover){hover = h; cv.style.cursor = h ? 'pointer' : '';} return;}
+  ptrs.set(e.pointerId, p);
+  if(!gesture) return;
+  if(gesture.type === 'pinch' && ptrs.size === 2){
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, gesture.k * d / gesture.d / cam.k); return;
+  }
+  if(Math.hypot(p.x - gesture.sx, p.y - gesture.sy) > 5) gesture.moved = true;
+  if(gesture.type === 'node' && gesture.moved){
+    const w = toWorld(p.x, p.y); gesture.node.x = w.x; gesture.node.y = w.y; gesture.node.fixed = true; alpha = Math.max(alpha, .25);
+  } else if(gesture.type === 'pan'){cam.x += p.x - gesture.lx; cam.y += p.y - gesture.ly;}
+  gesture.lx = p.x; gesture.ly = p.y;
+});
+function endPtr(e){
+  ptrs.delete(e.pointerId); cv.classList.remove('dragging');
+  if(gesture && gesture.type !== 'pinch' && !gesture.moved){select(gesture.type === 'node' ? gesture.node : null);}
+  if(gesture && gesture.type === 'node' && gesture.moved) gesture.node.fixed = false;
+  gesture = ptrs.size ? {type:'pan', sx:0, sy:0, lx:[...ptrs.values()][0].x, ly:[...ptrs.values()][0].y, moved:true} : null;
+}
+cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
+cv.addEventListener('wheel', e => {e.preventDefault(); lastTouch = Date.now(); const p = local(e); zoomAt(p.x, p.y, Math.exp(-e.deltaY * .0015));}, {passive:false});
+addEventListener('keydown', e => {
+  if(e.target.tagName === 'INPUT') {if(e.key === 'Escape'){e.target.value = ''; setQuery('');} return;}
+  if(e.key === ' '){e.preventDefault(); togglePlay();}
+  else if(e.key === 'f' || e.key === 'F') fit();
+  else if(e.key === 'Escape') select(null);
+});
+
+/* ------------------------------------------------------------------ painel */
+function select(n){sel = n; if(n){tab = 'pagina'; focusNode(n);} renderPanel();}
+function setTab(t){tab = t; renderPanel();}
+['rastrear', 'resumo', 'pagina', 'prob'].forEach(t => $('#t-' + t).onclick = () => {$('#aside').classList.remove('min'); setTab(t);});
+function el(tag, cls, text){const e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e;}
+function fmt(v){return v == null ? '—' : Number(v).toLocaleString('pt-BR');}
+function nodeButton(n, k, why, sev){
+  const li = el('li'), b = el('button');
+  if(sev){const d = el('span', 'sev'); d.style.background = sev === 'bad' ? COL.bad : sev === 'warn' ? COL.warn : COL.violet; b.append(d);}
+  if(k != null) b.append(el('span', 'k', k));
+  const t = el('span', 't', n.title); if(why){t.append(el('span', 'why', why));} b.append(t);
+  b.onclick = () => select(n); li.append(b); return li;
+}
+function renderPanel(){
+  for(const t of ['rastrear', 'resumo', 'pagina', 'prob']) $('#t-' + t).setAttribute('aria-selected', String(tab === t));
+  const pane = $('#pane'), keep = tab === 'rastrear' && pane.dataset.tab === tab ? pane.scrollTop : 0;
+  pane.replaceChildren(); pane.dataset.tab = tab;
+  if(tab === 'rastrear') renderCrawl(pane);
+  else if(!G) return;
+  else if(tab === 'resumo') renderSummary(pane);
+  else if(tab === 'pagina') renderPage(pane);
+  else renderProblems(pane);
+  pane.scrollTop = keep;
+}
+function renderSummary(p){
+  p.append(el('div', 'site', G.site));
+  if(G.when){const d = new Date(G.when); p.append(el('div', 'when', 'coletado em ' + (isNaN(d) ? G.when : d.toLocaleString('pt-BR'))));}
+  const ok = G.nodes.filter(n => !n.bad), times = G.nodes.map(n => n.response_ms).filter(v => typeof v === 'number');
+  const avg = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;
+  const grid = el('div', 'grid'); grid.style.marginTop = '14px';
+  const stat = (v, l, c) => {const s = el('div', 'stat' + (c ? ' ' + c : '')); s.append(el('b', '', v), el('span', '', l)); grid.append(s);};
+  stat(fmt(G.nodes.length), 'páginas no mapa'); stat(fmt(G.edges.length), 'links entre elas');
+  stat(fmt(G.nodes.length - ok.length), 'com erro', G.nodes.length - ok.length ? 'bad' : '');
+  stat(fmt(G.broken.length), 'links quebrados', G.broken.length ? 'bad' : '');
+  stat(avg == null ? '—' : fmt(avg) + ' ms', 'resposta média', avg > 800 ? 'warn' : '');
+  stat(fmt(G.blocked), 'bloqueadas (robots.txt)');
+  p.append(grid);
+
+  p.append(el('h2', '', 'Páginas por profundidade'));
+  const bars = el('div', 'bars'), counts = [];
+  G.nodes.forEach(n => counts[n.depth] = (counts[n.depth] || 0) + 1);
+  const max = Math.max(...counts.filter(Boolean));
+  counts.forEach((c, d) => {if(!c) return; const tr = el('div', 'track'), f = el('div', 'fill');
+    f.style.width = (c / max * 100) + '%'; f.style.background = depthColor(d); tr.append(f);
+    bars.append(el('span', '', d === 0 ? 'inicial' : d + (d === 1 ? ' clique' : ' cliques')), tr, el('span', 'n', c));});
+  p.append(bars);
+
+  p.append(el('h2', '', 'Mais linkadas'));
+  const ul = el('ul', 'list');
+  [...G.nodes].sort((a, b) => b.lin - a.lin).slice(0, 6).forEach(n => ul.append(nodeButton(n, n.lin, null)));
+  p.append(ul);
+
+  const slow = G.nodes.filter(n => typeof n.response_ms === 'number').sort((a, b) => b.response_ms - a.response_ms).slice(0, 3);
+  if(slow.length){p.append(el('h2', '', 'Mais lentas')); const u2 = el('ul', 'list');
+    slow.forEach(n => u2.append(nodeButton(n, fmt(n.response_ms), 'ms para responder'))); p.append(u2);}
+  p.append(el('p', 'hint', 'Toque numa página do mapa para ver os detalhes. Arraste para mover, use dois dedos ou a roda do mouse para dar zoom.'));
+}
+function renderPage(p){
+  const n = sel;
+  if(!n){p.append(el('p', 'empty', 'Nenhuma página selecionada. Toque num círculo do mapa, use a busca ou escolha uma página no Resumo.')); return;}
+  p.append(el('h3', 'page-title', n.title));
+  if(n.url && /^https?:\/\//i.test(n.url)){const a = el('a', 'url', n.url); a.href = n.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    if(NATIVE) a.onclick = e => {e.preventDefault(); try{NATIVE.openUrl(n.url);}catch(_){}}; p.append(a);}
+  const chips = el('div', 'chips');
+  if(n.status != null) chips.append(el('span', 'chip ' + (n.status >= 400 ? 'bad' : n.status >= 300 ? 'warn' : 'ok'), 'HTTP ' + n.status));
+  chips.append(el('span', 'chip', n.depth === 0 ? 'página inicial' : 'a ' + n.depth + (n.depth === 1 ? ' clique' : ' cliques')));
+  if(n.error && !(n.status >= 400)) chips.append(el('span', 'chip bad', n.error));
+  if(n.noindex) chips.append(el('span', 'chip warn', 'noindex'));
+  if(n.requested_url) chips.append(el('span', 'chip warn', 'redirecionada'));
+  p.append(chips);
+  if(n.description) p.append(el('div', 'desc', n.description));
+  const dl = el('dl', 'kv');
+  const row = (k, v) => {if(v == null || v === '') return; dl.append(el('dt', '', k), el('dd', '', v));};
+  row('Recebe links de', fmt(n.lin) + (n.lin === 1 ? ' página' : ' páginas'));
+  row('Aponta para', fmt(n.lout) + (n.lout === 1 ? ' página' : ' páginas') + (n.links_external ? ' + ' + fmt(n.links_external) + ' externos' : ''));
+  row('Palavras', n.words != null ? fmt(n.words) : null);
+  row('Resposta', n.response_ms != null ? fmt(n.response_ms) + ' ms' : null);
+  row('Tamanho', n.size_kb != null ? fmt(n.size_kb) + ' KB' : null);
+  row('Título <h1>', n.h1); row('Idioma', n.lang);
+  row('Veio de', n.requested_url);
+  p.append(dl);
+  if(n.issues.length){p.append(el('h2', '', 'Problemas')); const u = el('ul', 'list');
+    n.issues.forEach(i => {const li = el('li'); const b = el('button'); const d = el('span', 'sev'); d.style.background = i.lvl === 'bad' ? COL.bad : i.lvl === 'warn' ? COL.warn : COL.violet; b.append(d, el('span', 't', i.txt)); b.disabled = true; b.style.cursor = 'default'; li.append(b); u.append(li);}); p.append(u);}
+  if(n.inN.length){p.append(el('h2', '', 'Quem aponta para ela')); const u = el('ul', 'list'); n.inN.slice(0, 40).forEach(m => u.append(nodeButton(m, '←'))); p.append(u);}
+  if(n.outN.length){p.append(el('h2', '', 'Para onde ela aponta')); const u = el('ul', 'list'); n.outN.slice(0, 40).forEach(m => u.append(nodeButton(m, '→', m.bad ? 'link quebrado' : null, m.bad ? 'bad' : null))); p.append(u);}
+}
+function renderProblems(p){
+  const order = {bad:0, warn:1, info:2};
+  const rows = [];
+  for(const n of G.nodes) for(const i of n.issues) rows.push({n, i});
+  for(const e of G.broken) rows.push({n:e.a, i:{lvl:'bad', txt:'Link quebrado para: ' + e.b.title}});
+  rows.sort((a, b) => order[a.i.lvl] - order[b.i.lvl] || b.n.lin - a.n.lin);
+  if(!rows.length){p.append(el('p', 'empty', 'Nenhum problema encontrado nas páginas coletadas.')); return;}
+  const groups = [['bad', 'Erros'], ['warn', 'Avisos'], ['info', 'Sugestões']];
+  for(const [lvl, name] of groups){
+    const g = rows.filter(r => r.i.lvl === lvl); if(!g.length) continue;
+    p.append(el('h2', '', name + ' · ' + g.length)); const u = el('ul', 'list');
+    g.slice(0, 120).forEach(r => u.append(nodeButton(r.n, null, r.i.txt, lvl))); p.append(u);
+  }
+}
+function updateProbCount(){
+  const c = G.nodes.filter(n => n.bad).length + G.broken.length, b = $('#probCount');
+  b.hidden = !c; b.textContent = c;
+}
+function renderLegend(){
+  const L = $('#legend'); L.replaceChildren();
+  for(let d = 0; d <= Math.min(G.maxDepth, 4); d++){const s = el('span'); const i = el('i'); i.style.background = depthColor(d); s.append(i, d === 0 ? 'inicial' : d === 4 && G.maxDepth > 4 ? '4+ cliques' : d + (d === 1 ? ' clique' : ' cliques')); L.append(s);}
+  const s = el('span'); const i = el('i'); i.style.background = COL.bad; s.append(i, 'erro'); L.append(s);
+}
+
+/* ------------------------------------------------------------------ busca e controles */
+function setQuery(v){
+  query = v.trim().toLowerCase(); matches = new Set();
+  if(query && G) for(const n of G.nodes) if(n.title.toLowerCase().includes(query) || String(n.url || '').toLowerCase().includes(query)) matches.add(n);
+}
+$('#q').addEventListener('input', e => setQuery(e.target.value));
+$('#q').addEventListener('keydown', e => {if(e.key === 'Enter' && matches.size){select([...matches].sort((a, b) => b.lin - a.lin)[0]);}});
+function playLabel(){$('#play').replaceChildren(running ? '⏸' : '▶', el('span', 'lbl', running ? 'Pausar' : 'Continuar'));}
+function togglePlay(){running = !running; playLabel();}
+$('#play').onclick = togglePlay; playLabel();
+const SPEEDS = [.5, 1, 2, 4];
+$('#speed').onclick = () => {speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; $('#speed').textContent = String(speed).replace('.', ',') + '×';};
+function setFollow(v){follow = v; $('#follow').classList.toggle('on', v); if(!v) camTarget = null;}
+$('#follow').onclick = () => {setFollow(!follow); if(follow && !running) togglePlay();};
+$('#fit').onclick = () => {setFollow(false); fit();};
+$('#demoBtn').onclick = () => {load(DEMO(), true); toast('Mapa de demonstração carregado.');};
+$('#sheet').onclick = () => {const a = $('#aside'); a.classList.toggle('min'); $('#sheet').textContent = a.classList.contains('min') ? '▴' : '▾'; requestAnimationFrame(() => {resize();});};
+
+let toastT = 0;
+function toast(msg, err){const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, err ? 6000 : 2600);}
+async function openFile(file){
+  try{const data = JSON.parse(await file.text()); load(data, false); toast('Mapa carregado: ' + G.nodes.length + ' páginas.');}
+  catch(err){toast('Não foi possível abrir "' + file.name + '": ' + (err instanceof SyntaxError ? 'o arquivo não é um JSON válido.' : err.message), true);}
+}
+$('#file').onchange = e => {const f = e.target.files?.[0]; if(f) openFile(f); e.target.value = '';};
+let dragDepth = 0;
+addEventListener('dragenter', e => {if([...(e.dataTransfer?.types || [])].includes('Files')){dragDepth++; $('#drop').hidden = false;}});
+addEventListener('dragleave', () => {if(--dragDepth <= 0){dragDepth = 0; $('#drop').hidden = true;}});
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => {e.preventDefault(); dragDepth = 0; $('#drop').hidden = true; const f = e.dataTransfer?.files?.[0]; if(f) openFile(f);});
+new ResizeObserver(() => {resize();}).observe(stage);
+
+/* ------------------------------------------------------------------ rastreamento dentro do app
+   No app Android, a ponte "AranhaNative" faz os pedidos HTTP pelo próprio sistema,
+   então o bloqueio CORS dos navegadores não se aplica. As mesmas regras do crawler.py:
+   mesmo site, robots.txt (com Crawl-delay), pausa entre pedidos, recuo em 429/503. */
+const UA = 'AranhaDigital/2.0 (app Android; rastreador educacional; respeita robots.txt)';
+const SKIP = /\.(jpe?g|png|gif|webp|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|tar|mp[34]|m4a|wav|ogg|avi|mov|mkv|webm|exe|apk|dmg|iso|docx?|xlsx?|pptx?|odt|csv|xml|json|css|js|woff2?|ttf)$/i;
+const TRACK = /^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref|ref_src|igshid)$/i;
+const crawl = {running:false, stopReq:false, log:[], result:null, done:0, queueLeft:0, status:'',
+               opts:{url:'', pages:40, depth:3, sitemap:false}};
+try{const o = JSON.parse(localStorage.getItem('aranha:opts') || 'null'); if(o) Object.assign(crawl.opts, o);}catch(_){}
+
+const pending = new Map(); let reqSeq = 0;
+window.__aranhaDone = r => {const cb = pending.get(String(r.id)); if(cb){pending.delete(String(r.id)); cb(r);}};
+function nativeGet(url){
+  return new Promise(res => {
+    const id = String(++reqSeq);
+    const timer = setTimeout(() => {pending.delete(id); res({ok:false, error:'tempo esgotado'});}, 40000);
+    pending.set(id, r => {clearTimeout(timer); res(r);});
+    try{NATIVE.fetch(id, url, UA);}catch(e){pending.delete(id); clearTimeout(timer); res({ok:false, error:String(e.message || e)});}
+  });
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const siteKey = h => h.toLowerCase().replace(/^www\./, '');
+function norm(href, base, keepQuery){
+  let u; try{u = new URL(href, base);}catch(_){return null;}
+  if(!/^https?:$/.test(u.protocol) || !u.hostname) return null;
+  u.hash = ''; u.username = ''; u.password = '';
+  u.pathname = u.pathname.replace(/\/{2,}/g, '/');
+  if(keepQuery){const q = [...u.searchParams].filter(([k]) => !TRACK.test(k)).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); u.search = new URLSearchParams(q).toString();}
+  else u.search = '';
+  return u.href;
+}
+function parseRobots(txt){
+  const groups = [], sitemaps = []; let cur = null, lastUA = false;
+  for(let line of txt.split(/\r?\n/)){
+    line = line.replace(/#.*/, '').trim(); if(!line) continue;
+    const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/); if(!m) continue;
+    const k = m[1].toLowerCase(), v = m[2].trim();
+    if(k === 'user-agent'){if(!cur || !lastUA){cur = {agents:[], rules:[], delay:null}; groups.push(cur);} cur.agents.push(v.toLowerCase()); lastUA = true; continue;}
+    lastUA = false;
+    if(k === 'sitemap'){sitemaps.push(v); continue;}
+    if(!cur) continue;
+    if(k === 'allow' || k === 'disallow'){if(v) cur.rules.push({allow:k === 'allow', path:v, re:robotsRe(v)});}
+    else if(k === 'crawl-delay'){const d = parseFloat(v); if(!isNaN(d)) cur.delay = d;}
+  }
+  const mine = groups.filter(g => g.agents.some(a => a !== '*' && 'aranhadigital'.includes(a)));
+  const chosen = mine.length ? mine : groups.filter(g => g.agents.includes('*'));
+  return {rules:chosen.flatMap(g => g.rules), delay:chosen.map(g => g.delay).find(d => d != null) ?? null, sitemaps};
+}
+function robotsRe(p){
+  const end = p.endsWith('$'); if(end) p = p.slice(0, -1);
+  return new RegExp('^' + p.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + (end ? '$' : ''));
+}
+function allowed(robots, url){
+  if(!robots.rules.length) return true;
+  const u = new URL(url), path = decodeSafe(u.pathname) + u.search; let best = null;
+  for(const r of robots.rules) if(r.re.test(path) || r.re.test(u.pathname + u.search))
+    if(!best || r.path.length > best.path.length || (r.path.length === best.path.length && r.allow)) best = r;
+  return !best || best.allow;
+}
+function decodeSafe(s){try{return decodeURIComponent(s);}catch(_){return s;}}
+
+async function politeGet(url, delayMs){
+  for(let attempt = 0; attempt < 3; attempt++){
+    const wait = delayMs - (Date.now() - crawl.lastReq);
+    if(wait > 0) await sleep(wait);
+    if(crawl.stopReq) return null;
+    crawl.lastReq = Date.now();
+    const r = await nativeGet(url);
+    if(r.ok && (r.status === 429 || r.status === 503) && attempt < 2){
+      const ra = parseInt(r.retryAfter, 10), w = Math.min(isNaN(ra) ? 5 * (attempt + 1) : ra, 60);
+      logLine('warn', '…', 'Servidor pediu calma (' + r.status + '); esperando ' + w + ' s'); await sleep(w * 1000); continue;
+    }
+    return r;
+  }
+}
+
+function analyze(url, depth, r, same, keepQuery){
+  const page = {url, depth, status:null, title:'', description:'', h1:'', lang:'', canonical:'', noindex:false, words:0,
+    response_ms:null, size_kb:null, links_internal:0, links_external:0, images_no_alt:0, content_type:'', error:''};
+  if(!r.ok){page.error = r.error || 'falha de conexão'; return page;}
+  page.status = r.status; page.response_ms = r.ms; page.content_type = (r.contentType || '').split(';')[0].trim();
+  const final = norm(r.url || url, undefined, keepQuery);
+  if(final && final !== url){page.redirected_to = final; if(!same(final)){page.error = 'redireciona para outro site'; return page;}}
+  if(r.status >= 400){page.error = 'HTTP ' + r.status; return page;}
+  if(!/html/i.test(page.content_type)){page.error = 'não é HTML'; return page;}
+  page.size_kb = Math.round((r.bytes || 0) / 102.4) / 10;
+  if(r.truncated) page.error = 'página muito grande (cortada)';
+  const doc = new DOMParser().parseFromString(r.body || '', 'text/html');   // documento inerte: não roda scripts
+  const here = page.redirected_to || url, clean = t => (t || '').replace(/\s+/g, ' ').trim();
+  page.title = clean(doc.querySelector('title')?.textContent).slice(0, 160);
+  const meta = name => [...doc.querySelectorAll('meta[name]')].find(m => m.getAttribute('name').toLowerCase() === name);
+  page.description = clean(meta('description')?.getAttribute('content')).slice(0, 300);
+  const mr = (meta('robots')?.getAttribute('content') || '').toLowerCase();
+  page.noindex = mr.includes('noindex');
+  page.h1 = clean(doc.querySelector('h1')?.textContent).slice(0, 160);
+  page.lang = doc.documentElement.getAttribute('lang') || '';
+  const canon = [...doc.querySelectorAll('link[rel][href]')].find(l => /(^|\s)canonical(\s|$)/i.test(l.getAttribute('rel')));
+  page.canonical = canon ? (norm(canon.getAttribute('href'), here, true) || '') : '';
+  page.images_no_alt = [...doc.querySelectorAll('img')].filter(i => !(i.getAttribute('alt') || '').trim()).length;
+  const bh = doc.querySelector('base[href]')?.getAttribute('href');
+  const baseUrl = bh ? (norm(bh, here, true) || here) : here;
+  const internal = [], seen = new Set(); let external = 0;
+  for(const a of doc.querySelectorAll('a[href]')){
+    const href = a.getAttribute('href').trim();
+    if(!href || /^(mailto:|tel:|javascript:|#|data:)/i.test(href)) continue;
+    const t = norm(href, baseUrl, keepQuery); if(!t) continue;
+    if(!same(t)){external++; continue;}
+    if(seen.has(t) || t === here) continue;
+    seen.add(t); internal.push(t);
+  }
+  page.links_internal = internal.length; page.links_external = external;
+  doc.querySelectorAll('script,style,noscript,template,svg').forEach(e => e.remove());
+  page.words = (doc.body?.textContent || '').split(/\s+/).filter(Boolean).length;
+  if(!mr.includes('nofollow')) page._links = internal.slice(0, 40);
+  return page;
+}
+
+function buildResult(st){
+  const {start, pages, links, alias, blocked, queue, opts} = st, resolve = u => alias.get(u) || u;
+  const ids = new Map([...pages.keys()].map((u, i) => [u, String(i)])), inbound = new Map([...pages.keys()].map(u => [u, 0]));
+  const edges = [], keys = new Set(), broken = [];
+  for(const [src, targets] of links){
+    if(!ids.has(src)) continue;
+    for(let t of targets){
+      t = resolve(t); if(!ids.has(t) || t === src) continue;
+      const k = src + '>' + t; if(keys.has(k)) continue; keys.add(k);
+      edges.push({source:ids.get(src), target:ids.get(t)}); inbound.set(t, inbound.get(t) + 1);
+      const s = pages.get(t).status; if(s == null || s >= 400) broken.push({from:src, to:t, status:s});
+    }
+  }
+  const nodes = [...pages.values()].map(p => ({id:ids.get(p.url), ...p, title:p.title || p.h1 || new URL(p.url).pathname, page_title:p.title, links_in:inbound.get(p.url)}));
+  const all = [...pages.values()], ok = all.filter(p => p.status && p.status < 400 && !p.error);
+  const times = all.map(p => p.response_ms).filter(v => v != null);
+  return {site:start, generated_at:new Date().toISOString(), crawler:'AranhaDigital 2.0 (app)',
+    settings:{max_pages:opts.pages, max_depth:opts.depth, delay:st.delayMs / 1000, sitemap:opts.sitemap},
+    stats:{pages:nodes.length, edges:edges.length, ok:ok.length, errors:all.filter(p => p.error).length,
+      blocked_by_robots:blocked.size, avg_response_ms:times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null,
+      missing_title:ok.filter(p => !p.title).length, missing_description:ok.filter(p => !p.description).length,
+      broken_links:broken.length, queue_left:queue.length},
+    nodes, edges, broken_links:broken.slice(0, 500), blocked:[...blocked].slice(0, 200)};
+}
+
+function logLine(kind, st, text, ms){
+  crawl.log.push({kind, st:String(st ?? ''), text:String(text || ''), ms});
+  if(crawl.log.length > 400) crawl.log.shift();
+}
+function refreshCrawl(){if(tab === 'rastrear') renderPanel();}
+function failCrawl(msg){logLine('bad', 'erro', msg); crawl.running = false; crawl.status = ''; toast(msg, true); refreshCrawl();}
+
+async function startCrawl(){
+  if(crawl.running) return;
+  let raw = crawl.opts.url.trim();
+  if(!raw){toast('Digite o endereço do site que você quer mapear.', true); return;}
+  if(!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  const start = norm(raw, undefined, false);
+  if(!start){toast('Esse endereço não parece válido. Exemplo: https://www.exemplo.com.br', true); return;}
+  try{localStorage.setItem('aranha:opts', JSON.stringify(crawl.opts));}catch(_){}
+  $('#ticker').textContent = 'Começando por ' + start;
+  Object.assign(crawl, {running:true, stopReq:false, log:[], result:null, done:0, queueLeft:0, lastReq:0, status:'Lendo robots.txt…'});
+  const opts = {...crawl.opts}, origin = new URL(start).origin, site = siteKey(new URL(start).hostname);
+  const same = u => {try{return siteKey(new URL(u).hostname) === site;}catch(_){return false;}};
+  refreshCrawl();
+
+  const rr = await nativeGet(origin + '/robots.txt'); crawl.lastReq = Date.now();
+  if(crawl.stopReq){crawl.running = false; refreshCrawl(); return;}
+  if(!rr.ok) return failCrawl('Não consegui acessar ' + origin + ' (' + rr.error + '). Confira a internet e o endereço.');
+  if(rr.status === 401 || rr.status === 403) return failCrawl('O robots.txt deste site nega acesso a robôs. Nada foi coletado.');
+  const robots = rr.status >= 400 ? {rules:[], delay:null, sitemaps:[]} : parseRobots(rr.body || '');
+  logLine('info', 'robots', rr.status >= 400 ? 'Sem robots.txt: tudo liberado' : 'robots.txt lido: ' + robots.rules.length + ' regras');
+  if(!allowed(robots, start)) return failCrawl('O robots.txt não permite rastrear a página inicial. Nada foi coletado.');
+  const delayMs = Math.max(1500, (robots.delay || 0) * 1000);
+  if(robots.delay) logLine('info', 'robots', 'Pede ' + robots.delay + ' s entre pedidos; usando ' + delayMs / 1000 + ' s');
+
+  const st = {start, opts, delayMs, pages:new Map(), alias:new Map(), links:new Map(), blocked:new Set(), queue:[[start, 0]]};
+  const queued = new Set([start]);
+  if(opts.sitemap){
+    let added = 0;
+    for(const sm of (robots.sitemaps.length ? robots.sitemaps : [origin + '/sitemap.xml']).slice(0, 3)){
+      crawl.status = 'Lendo ' + sm; refreshCrawl();
+      const r = await politeGet(sm, delayMs); if(!r) break;
+      if(!r.ok || r.status !== 200) continue;
+      for(const m of (r.body || '').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)){
+        const u = norm(m[1].replace(/&amp;/g, '&'), undefined, false);
+        if(u && same(u) && !queued.has(u) && !SKIP.test(new URL(u).pathname)){queued.add(u); st.queue.push([u, 1]); if(++added >= 500) break;}
+      }
+    }
+    logLine('info', 'sitemap', added ? added + ' endereços adicionados à fila' : 'nenhum sitemap útil encontrado');
+  }
+
+  try{
+    while(st.queue.length && st.pages.size < opts.pages && !crawl.stopReq){
+      const [url, depth] = st.queue.shift();
+      if(st.pages.has(url) || st.alias.has(url)) continue;
+      if(!allowed(robots, url)){st.blocked.add(url); continue;}
+      if(SKIP.test(new URL(url).pathname)) continue;
+      crawl.status = 'Lendo ' + url; refreshCrawl();
+      const r = await politeGet(url, delayMs); if(!r) break;
+      const page = analyze(url, depth, r, same, false);
+      const final = page.redirected_to;
+      if(final && final !== url){st.alias.set(url, final); if(st.pages.has(final)) continue; page.requested_url = url; page.url = final;}
+      const pageLinks = page._links; delete page._links;
+      st.pages.set(page.url, page);
+      if(pageLinks) st.links.set(page.url, pageLinks);
+      if(depth < opts.depth) for(const t of pageLinks || []) if(!queued.has(t)){queued.add(t); st.queue.push([t, depth + 1]);}
+      crawl.done = st.pages.size; crawl.queueLeft = st.queue.length;
+      logLine(page.error ? 'bad' : 'ok', page.status || '---', page.title || page.error || page.url, page.response_ms);
+      // a aranha vai até a página que acabou de ser lida, saindo de quem apontou para ela
+      liveFrom = [...st.links].find(([, ls]) => ls.includes(url) || ls.includes(page.url))?.[0] || null;
+      liveTarget = page.url;
+      crawl.result = buildResult(st);
+      load(crawl.result, false, true);
+    }
+  }catch(e){logLine('bad', 'erro', 'Erro inesperado: ' + (e.message || e));}
+
+  crawl.running = false; crawl.status = ''; crawl.queueLeft = st.queue.length;
+  if(crawl.result){
+    crawl.result.stats.queue_left = st.queue.length;
+    liveTarget = liveFrom = null;
+    load(crawl.result, false);
+    try{localStorage.setItem('aranha:last', JSON.stringify(crawl.result));}catch(_){}
+    const s = crawl.result.stats;
+    logLine('info', 'fim', s.pages + ' páginas, ' + s.edges + ' links, ' + s.errors + ' com erro' + (crawl.stopReq ? ' (parado por você)' : ''));
+    toast('Pronto: ' + s.pages + ' páginas mapeadas.');
+  } else if(!crawl.log.some(l => l.kind === 'bad')) logLine('warn', 'fim', 'Nenhuma página coletada.');
+  refreshCrawl();
+}
+
+const CSV_COLS = ['url', 'status', 'depth', 'page_title', 'h1', 'description', 'words', 'response_ms', 'size_kb', 'links_in',
+  'links_internal', 'links_external', 'images_no_alt', 'lang', 'canonical', 'noindex', 'requested_url', 'error'];
+function toCSV(res){
+  const q = v => {v = v == null ? '' : String(v); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;};
+  return '﻿' + [CSV_COLS.join(';'), ...res.nodes.map(n => CSV_COLS.map(c => q(n[c])).join(';'))].join('\r\n') + '\r\n';
+}
+function saveExport(kind){
+  const res = G && !G.isDemo ? lastLoaded : null; if(!res) return;
+  const host = (() => {try{return new URL(res.site).hostname.replace(/^www\./, '');}catch(_){return 'site';}})();
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const name = kind === 'csv' ? 'relatorio-' + host + '-' + stamp + '.csv' : 'mapa-' + host + '-' + stamp + '.json';
+  const out = NATIVE.saveFile(name, kind === 'csv' ? toCSV(res) : JSON.stringify(res, null, 2));
+  if(out && !out.startsWith('erro')) toast('Salvo em ' + out); else toast('Não foi possível salvar: ' + (out || 'erro desconhecido'), true);
+}
+
+function renderCrawl(p){
+  p.append(el('h2', '', 'Mapear um site'));
+  if(!NATIVE){
+    p.append(el('p', 'empty', 'O rastreamento direto funciona no app Android da Aranha Digital. No navegador, os sites bloqueiam esse tipo de leitura (regra de segurança chamada CORS).'));
+    p.append(el('p', 'empty', 'Aqui você pode abrir um mapa.json gerado pelo crawler.py com o botão ⬆ lá em cima.'));
+    return;
+  }
+  const f = el('form', 'form'); f.onsubmit = e => {e.preventDefault(); crawl.running ? (crawl.stopReq = true, crawl.status = 'Parando…', refreshCrawl()) : startCrawl();};
+  const lu = el('label', '', 'Endereço do site'), iu = el('input'); Object.assign(iu, {type:'url', id:'c-url', placeholder:'https://www.exemplo.com.br', value:crawl.opts.url, disabled:crawl.running, autocapitalize:'off', spellcheck:false, inputMode:'url', enterKeyHint:'go'});
+  iu.oninput = () => crawl.opts.url = iu.value; lu.append(iu);
+  const row = el('div', 'row');
+  const mkSel = (label, id, vals, key, fmtv) => {const l = el('label', '', label), s = el('select'); s.id = id; s.disabled = crawl.running;
+    vals.forEach(v => {const o = el('option', '', fmtv(v)); o.value = v; if(v === crawl.opts[key]) o.selected = true; s.append(o);});
+    s.onchange = () => crawl.opts[key] = Number(s.value); l.append(s); return l;};
+  row.append(mkSel('Máximo de páginas', 'c-pages', [10, 20, 40, 100, 200, 500], 'pages', v => v + ' páginas'),
+             mkSel('Profundidade', 'c-depth', [1, 2, 3, 4, 5], 'depth', v => v + (v === 1 ? ' clique' : ' cliques')));
+  const lc = el('label', 'check'), ic = el('input'); Object.assign(ic, {type:'checkbox', id:'c-sitemap', checked:crawl.opts.sitemap, disabled:crawl.running});
+  ic.onchange = () => crawl.opts.sitemap = ic.checked; lc.append(ic, 'Também usar o sitemap.xml do site');
+  const go = el('button', 'go' + (crawl.running ? ' stop' : ''), crawl.running ? (crawl.stopReq ? 'Parando…' : 'Parar') : 'Começar a rastrear');
+  go.type = 'submit'; go.disabled = crawl.running && crawl.stopReq;
+  f.append(lu, row, lc, go); p.append(f);
+
+  if(crawl.running || crawl.done){
+    const pr = el('div', 'prog'), bar = el('div'); bar.style.width = Math.min(100, crawl.done / crawl.opts.pages * 100) + '%'; pr.append(bar); p.append(pr);
+    p.append(el('div', 'progtxt', crawl.done + ' de até ' + crawl.opts.pages + ' páginas · ' + crawl.queueLeft + ' na fila' + (crawl.status ? ' · ' + crawl.status : '')));
+  }
+  if(!crawl.running && (crawl.result || (G && !G.isDemo))){
+    const sv = el('div', 'saves'), bj = el('button', 'btn', '⬇ Salvar mapa.json'), bc = el('button', 'btn', '⬇ Salvar planilha CSV');
+    bj.type = bc.type = 'button'; bj.onclick = () => saveExport('json'); bc.onclick = () => saveExport('csv'); sv.append(bj, bc); p.append(sv);
+  }
+  if(crawl.log.length){
+    p.append(el('h2', '', 'Registro'));
+    const ul = el('ul', 'log');
+    crawl.log.slice(-80).reverse().forEach(l => {const li = el('li'); li.append(el('span', 'st ' + l.kind, l.st), el('span', 'tx', l.text)); if(l.ms != null) li.append(el('span', 'ms', fmt(l.ms) + ' ms')); ul.append(li);});
+    p.append(ul);
+  }
+  p.append(el('p', 'hint', 'A aranha só visita páginas públicas do mesmo site, lê e respeita o robots.txt e espera pelo menos 1,5 s entre pedidos. Sites que montam o conteúdo com JavaScript podem aparecer com pouco texto. Confira os termos de uso do site antes de rastrear.'));
+}
+
+/* ------------------------------------------------------------------ demonstração
+   Site fictício de uma biblioteca municipal, no mesmo formato que o crawler.py gera. */
+function DEMO(){
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const base = 'https://bibliotecaexemplo.org.br';
+  const P = [
+    ['/', 'Biblioteca Municipal Exemplo', 0], ['/acervo/', 'Acervo', 1], ['/eventos/', 'Agenda de eventos', 1], ['/servicos/', 'Serviços', 1],
+    ['/sobre/', 'Sobre a biblioteca', 1], ['/contato/', 'Contato e endereço', 1], ['/noticias/', 'Notícias', 1], ['/horarios/', 'Horários de funcionamento', 1],
+    ['/acervo/livros/', 'Catálogo de livros', 2], ['/acervo/periodicos/', 'Jornais e revistas', 2], ['/acervo/mapas-antigos/', 'Coleção de mapas antigos', 2],
+    ['/acervo/obras-raras/', 'Obras raras', 2], ['/eventos/clube-de-leitura/', 'Clube de leitura', 2], ['/eventos/oficina-de-escrita/', 'Oficina de escrita criativa', 2],
+    ['/eventos/feira-do-livro-2026/', 'Feira do Livro 2026', 2], ['/servicos/emprestimo/', 'Como funciona o empréstimo', 2], ['/servicos/renovacao/', 'Renovação online', 2],
+    ['/servicos/wifi/', 'Wi-Fi e computadores', 2], ['/servicos/acessibilidade/', 'Acessibilidade', 2], ['/sobre/historia/', 'Nossa história', 2],
+    ['/sobre/equipe/', 'Equipe', 2], ['/sobre/voluntariado/', 'Seja voluntário', 2], ['/sobre/doacoes/', 'Doação de livros', 2],
+    ['/infantil/', 'Espaço infantil', 1], ['/infantil/contacao/', 'Contação de histórias', 2], ['/noticias/reforma-telhado/', 'Reforma do telhado concluída', 2],
+    ['/noticias/novo-acervo-digital/', 'Novo acervo digital', 2], ['/noticias/premio-leitura/', 'Prêmio de incentivo à leitura', 2],
+    ['/acervo/livros/lancamentos/', 'Lançamentos do mês', 3], ['/acervo/mapas-antigos/cidade-1890/', 'Planta da cidade em 1890', 3],
+    ['/eventos/feira-do-livro-2026/programacao/', 'Programação da feira', 3], ['/eventos/feira-do-livro-2026/expositores/', 'Expositores', 3],
+    ['/privacidade/', 'Política de privacidade', 1], ['/servicos/renovacao/ajuda/', 'Ajuda com a renovação', 3]
+  ];
+  const nodes = P.map(([path, title, depth], i) => ({id:String(i), url:base + path, title, page_title:title, depth, status:200,
+    description:'Página "' + title + '" da Biblioteca Municipal Exemplo.', words:Math.round(180 + rnd() * 900),
+    response_ms:Math.round(90 + rnd() * 380), size_kb:Math.round(20 + rnd() * 90), links_external:Math.round(rnd() * 4),
+    images_no_alt:rnd() < .2 ? 1 + Math.round(rnd() * 3) : 0, lang:'pt-BR', h1:title, error:''}));
+  const at = path => P.findIndex(p => p[0] === path);
+  Object.assign(nodes[at('/servicos/renovacao/')], {status:404, error:'HTTP 404', words:0, description:'', page_title:'', size_kb:1});
+  Object.assign(nodes[at('/acervo/mapas-antigos/cidade-1890/')], {response_ms:2340, size_kb:640});
+  Object.assign(nodes[at('/sobre/equipe/')], {page_title:'', words:42});
+  Object.assign(nodes[at('/contato/')], {description:''});
+  Object.assign(nodes[at('/privacidade/')], {noindex:true, words:1650});
+  nodes.forEach(n => n.title = n.page_title || n.h1);
+  const edges = [], add = (a, b) => edges.push({source:String(at(a)), target:String(at(b))});
+  const menu = ['/', '/acervo/', '/eventos/', '/servicos/', '/sobre/', '/contato/'];
+  P.forEach(([path]) => {if(path === '/servicos/renovacao/') return; menu.forEach(m => m !== path && add(path, m));});
+  ['/noticias/', '/horarios/', '/infantil/', '/privacidade/'].forEach(p => add('/', p));
+  P.forEach(([path]) => {const parent = path.replace(/[^/]+\/$/, ''); if(parent.length > 1 && parent !== path && at(parent) >= 0) add(parent, path);});
+  add('/', '/eventos/feira-do-livro-2026/'); add('/noticias/novo-acervo-digital/', '/acervo/obras-raras/');
+  add('/servicos/emprestimo/', '/servicos/renovacao/'); add('/horarios/', '/servicos/renovacao/'); add('/servicos/', '/servicos/renovacao/ajuda/');
+  add('/infantil/contacao/', '/eventos/clube-de-leitura/'); add('/sobre/', '/sobre/voluntariado/'); add('/eventos/', '/infantil/contacao/');
+  add('/acervo/', '/acervo/livros/lancamentos/'); add('/noticias/premio-leitura/', '/eventos/clube-de-leitura/');
+  ['/contato/', '/horarios/'].forEach(p => add(p, '/servicos/acessibilidade/'));
+  return {site:base + '/', generated_at:'2026-10-11T14:30:00-03:00', nodes, edges, stats:{blocked_by_robots:2}, blocked:['/admin/', '/busca/']};
+}
+
+resize();
+let restored = false;
+try{const last = localStorage.getItem('aranha:last'); if(last){load(JSON.parse(last), false); restored = true;}}catch(_){}
+if(!restored) load(DEMO(), true);
+if(NATIVE){tab = 'rastrear'; renderPanel();}
+requestAnimationFrame(frame);
+if(REDUCE) $('#ticker').textContent = 'Animação pausada (seu sistema pede menos movimento). Toque em ▶ para iniciar.';
+})();
+</script>
+
+</html>

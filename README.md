@@ -1,0 +1,30 @@
+# Aranha Digital 2.0
+
+App Android que mapeia os links de um site público: você digita o endereço, uma aranha
+percorre as páginas e monta um mapa interativo com relatório de problemas
+(erros HTTP, links quebrados, páginas lentas, sem título ou sem descrição).
+
+## Baixar o APK
+
+Abra a aba **Releases** deste repositório e toque em `AranhaDigital.apk`.
+Funciona no Android 7.0 ou mais novo. Na primeira instalação o Android pede para
+permitir "instalar apps desta fonte" para o navegador ou o app de arquivos.
+
+O APK é gerado automaticamente pelo GitHub Actions a cada envio (`.github/workflows/build-apk.yml`).
+
+## O que tem aqui
+
+| Pasta | Conteúdo |
+|---|---|
+| `app/` | Projeto Android (Java + WebView). A ponte `AranhaNative` faz os pedidos HTTP, abre e salva arquivos. |
+| `web/viewer.html` | A tela do app: mapa, aranha, painéis e o rastreador em JavaScript. |
+| `python/crawler.py` | O mesmo rastreador para PC ou Pydroid 3; gera `mapa.json` e `relatorio.csv`. |
+| `icon/` | Ícone da aranha (`make_icon.py` gera os vetores e o SVG). |
+| `build.sh` | Copia `web/viewer.html` para dentro do app. |
+
+## Regras que o rastreador segue
+
+- Só visita páginas públicas do mesmo site (`www.site.com` e `site.com` contam como um).
+- Lê e respeita o `robots.txt`, inclusive o `Crawl-delay`; se ele negar acesso, não coleta nada.
+- Espera pelo menos 1,5 s entre pedidos e recua quando o servidor responde 429/503.
+- Não passa por login, captcha nem proteção anti-robô.
