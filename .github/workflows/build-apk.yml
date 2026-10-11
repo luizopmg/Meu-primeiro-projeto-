@@ -40,8 +40,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="v2.0-build${{ github.run_number }}"
+          TAG="v2.1-build${{ github.run_number }}"
           gh release create "$TAG" AranhaDigital.apk \
             --target "${{ github.sha }}" \
-            --title "Aranha Digital 2.0 (build ${{ github.run_number }})" \
+            --title "Aranha Digital 2.1 (build ${{ github.run_number }})" \
             --notes "Toque em AranhaDigital.apk abaixo para baixar e instalar no Android 7 ou mais novo."

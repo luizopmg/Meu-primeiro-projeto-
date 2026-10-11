@@ -43,7 +43,7 @@ USER_AGENT = f"AranhaDigital/{VERSION} (rastreador educacional; respeita robots.
 MAX_BYTES = 3_000_000  # não baixa páginas maiores que ~3 MB
 SKIP_EXT = re.compile(
     r"\.(jpe?g|png|gif|webp|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|tar|mp[34]|m4a|wav|ogg|"
-    r"avi|mov|mkv|webm|exe|apk|dmg|iso|docx?|xlsx?|pptx?|odt|csv|xml|json|css|js|woff2?|ttf)$",
+    r"avi|mov|mkv|webm|exe|apk|dmg|iso|docx?|xlsx?|pptx?|odt|csv|xml|json|css|js|woff2?|ttf|md|txt)$",
     re.I,
 )
 TRACKING = re.compile(r"^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref|ref_src|igshid)$", re.I)
@@ -108,7 +108,7 @@ class Robots:
 # ----------------------------------------------------------------------------- coleta
 class Crawler:
     def __init__(self, start: str, max_pages: int, max_depth: int, delay: float,
-                 links_per_page: int, keep_query: bool, use_sitemap: bool):
+                 links_per_page: int, keep_query: bool, use_sitemap: bool, use_llms: bool = False):
         self.start = normalize(start, keep_query)
         if not self.start:
             raise ValueError("Informe um endereço válido começando com http:// ou https://")
@@ -137,6 +137,7 @@ class Crawler:
         self.queued: set[str] = {self.start}
         self.blocked: set[str] = set()
         self._last_request = 0.0
+        self.llms = self._read_llms(seed=use_llms)
         if use_sitemap:
             self._seed_sitemap()
 
@@ -165,6 +166,40 @@ class Crawler:
             r.close()
             time.sleep(wait)
         return r
+
+    def _read_llms(self, seed: bool) -> dict:
+        """Procura o /llms.txt (resumo opcional do site para assistentes de IA, llmstxt.org)."""
+        url = f"{self.base}/llms.txt"
+        info = {"found": False, "url": url}
+        if not self.robots.can_fetch(url):
+            return info
+        try:
+            r = self._get(url, stream=False)
+        except requests.RequestException:
+            return info
+        ctype = r.headers.get("Content-Type", "").lower()
+        if r.status_code != 200 or "html" in ctype or not r.text.strip():
+            print("llms.txt: este site não tem")
+            return info
+        lines = r.text.splitlines()
+        first = lambda pat: next((re.sub(pat, "", l).strip() for l in lines if re.match(pat, l)), "")
+        links = []
+        for title, href in re.findall(r"\[([^\]]+)\]\(([^)\s]+)\)", r.text)[:500]:
+            links.append({"title": title.strip(), "url": urljoin(url, href)})
+        info.update(found=True, title=first(r"^#\s+"), summary=first(r"^>\s?"),
+                    sections=[re.sub(r"^##\s+", "", l).strip() for l in lines if l.startswith("## ")][:30],
+                    links=links, size=len(r.text))
+        print(f"llms.txt: encontrado — {info['title'] or 'sem título'} ({len(links)} links)")
+        if seed:
+            added = 0
+            for l in links:
+                u = normalize(l["url"], self.keep_query)
+                if u and self.same_site(u) and u not in self.queued and not SKIP_EXT.search(urlparse(u).path):
+                    self.queue.append((u, 1))
+                    self.queued.add(u)
+                    added += 1
+            print(f"llms.txt: {added} páginas adicionadas à fila")
+        return info
 
     def _seed_sitemap(self):
         sources = self.robots.sitemaps or [f"{self.base}/sitemap.xml"]
@@ -347,7 +382,7 @@ class Crawler:
                 "crawler": f"AranhaDigital {VERSION}",
                 "settings": {"max_pages": self.max_pages, "max_depth": self.max_depth, "delay": self.delay,
                              "keep_query": self.keep_query},
-                "stats": stats, "nodes": nodes, "edges": uniq, "broken_links": broken[:500],
+                "stats": stats, "llms_txt": self.llms, "nodes": nodes, "edges": uniq, "broken_links": broken[:500],
                 "blocked": sorted(self.blocked)[:200]}
 
 
@@ -374,6 +409,8 @@ def summary(result: dict):
           f"{s['blocked_by_robots']} bloqueadas pelo robots.txt")
     if s["avg_response_ms"] is not None:
         print(f" tempo médio de resposta: {s['avg_response_ms']} ms")
+    lt = result.get("llms_txt") or {}
+    print(f" llms.txt: {'encontrado — ' + (lt.get('title') or 'sem título') if lt.get('found') else 'não encontrado'}")
     print(f" sem título: {s['missing_title']} · sem descrição: {s['missing_description']} · "
           f"links quebrados: {s['broken_links']}")
     top = sorted(nodes, key=lambda n: n["links_in"], reverse=True)[:5]
@@ -410,6 +447,7 @@ def main():
     ap.add_argument("--links", type=int, default=40, help="links seguidos por página (padrão 40)")
     ap.add_argument("--keep-query", action="store_true", help="trata ?parametros como páginas diferentes")
     ap.add_argument("--sitemap", action="store_true", help="também usa o sitemap.xml para achar páginas")
+    ap.add_argument("--llms", action="store_true", help="também segue os links do llms.txt do site")
     ap.add_argument("-o", "--out", default="mapa.json", help="arquivo JSON de saída")
     ap.add_argument("--csv", default="relatorio.csv", help="arquivo CSV de saída")
     a = ap.parse_args()
@@ -422,11 +460,12 @@ def main():
         a.max_pages = ask("Quantas páginas no máximo", a.max_pages)
         a.max_depth = ask("Profundidade máxima", a.max_depth)
         a.sitemap = ask("Usar sitemap.xml? (s/n)", "n").lower().startswith("s")
+        a.llms = ask("Seguir os links do llms.txt? (s/n)", "n").lower().startswith("s")
 
     a.max_pages = max(1, min(a.max_pages, 2000))
     a.delay = max(0.5, a.delay)
     try:
-        crawler = Crawler(a.url, a.max_pages, a.max_depth, a.delay, a.links, a.keep_query, a.sitemap)
+        crawler = Crawler(a.url, a.max_pages, a.max_depth, a.delay, a.links, a.keep_query, a.sitemap, a.llms)
         if crawler.robots.deny_all:
             sys.exit("O robots.txt deste site nega acesso a robôs. Nada foi coletado.")
         if not crawler.robots.can_fetch(crawler.start):

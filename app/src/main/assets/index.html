@@ -260,7 +260,7 @@ function load(data, isDemo, live){
   const prevSel = live && sel ? keyOf(sel) : null;
   const broken = edges.filter(e => e.b.bad);
   G = {site:data.site || 'mapa importado', when:data.generated_at || '', nodes, edges, root, broken,
-       maxDepth: Math.max(...nodes.map(n => n.depth)), isDemo, stats:data.stats || null, blocked:(data.blocked||[]).length || data.stats?.blocked_by_robots || 0};
+       maxDepth: Math.max(...nodes.map(n => n.depth)), isDemo, stats:data.stats || null, llms:data.llms_txt, blocked:(data.blocked||[]).length || data.stats?.blocked_by_robots || 0};
   if(live){
     alpha = Math.max(alpha, .35);
     if(!walk || !walk.live) walk = {live:true, tour:[], i:0, t:0, silk:new Set(), x:root.x, y:root.y, ang:0, phase:0, pause:0, visited:0, fade:1};
@@ -583,6 +583,19 @@ function renderSummary(p){
   stat(avg == null ? '—' : fmt(avg) + ' ms', 'resposta média', avg > 800 ? 'warn' : '');
   stat(fmt(G.blocked), 'bloqueadas (robots.txt)');
   p.append(grid);
+  if(G.llms !== undefined){
+    p.append(el('h2', '', 'llms.txt'));
+    const box = el('div', 'desc');
+    if(G.llms && G.llms.found){
+      box.append(el('b', '', G.llms.title || 'Sem título (falta a linha "# Nome")'));
+      if(G.llms.summary) box.append(document.createElement('br'), G.llms.summary);
+      const meta = el('div', 'when', G.llms.links.length + ' links · ' + (G.llms.sections || []).length + ' seções · ' + fmt(G.llms.size) + ' caracteres');
+      box.append(meta);
+      if(/^https?:/.test(G.llms.url)){const a = el('a', 'url', G.llms.url); a.href = G.llms.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        if(NATIVE) a.onclick = e => {e.preventDefault(); try{NATIVE.openUrl(G.llms.url);}catch(_){}}; box.append(a);}
+    } else box.append('Este site não publica um llms.txt. É um arquivo opcional, na raiz do site, que resume o conteúdo para assistentes de IA.');
+    p.append(box);
+  }
 
   p.append(el('h2', '', 'Páginas por profundidade'));
   const bars = el('div', 'bars'), counts = [];
@@ -693,10 +706,10 @@ new ResizeObserver(() => {resize();}).observe(stage);
    então o bloqueio CORS dos navegadores não se aplica. As mesmas regras do crawler.py:
    mesmo site, robots.txt (com Crawl-delay), pausa entre pedidos, recuo em 429/503. */
 const UA = 'AranhaDigital/2.0 (app Android; rastreador educacional; respeita robots.txt)';
-const SKIP = /\.(jpe?g|png|gif|webp|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|tar|mp[34]|m4a|wav|ogg|avi|mov|mkv|webm|exe|apk|dmg|iso|docx?|xlsx?|pptx?|odt|csv|xml|json|css|js|woff2?|ttf)$/i;
+const SKIP = /\.(jpe?g|png|gif|webp|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|tar|mp[34]|m4a|wav|ogg|avi|mov|mkv|webm|exe|apk|dmg|iso|docx?|xlsx?|pptx?|odt|csv|xml|json|css|js|woff2?|ttf|md|txt)$/i;
 const TRACK = /^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref|ref_src|igshid)$/i;
 const crawl = {running:false, stopReq:false, log:[], result:null, done:0, queueLeft:0, status:'',
-               opts:{url:'', pages:40, depth:3, sitemap:false}};
+               opts:{url:'', pages:40, depth:3, sitemap:false, llms:false}};
 try{const o = JSON.parse(localStorage.getItem('aranha:opts') || 'null'); if(o) Object.assign(crawl.opts, o);}catch(_){}
 
 const pending = new Map(); let reqSeq = 0;
@@ -806,6 +819,13 @@ function analyze(url, depth, r, same, keepQuery){
   return page;
 }
 
+function parseLlms(txt, url){
+  const lines = txt.split(/\r?\n/), first = re => (lines.find(l => re.test(l)) || '').replace(re, '').trim();
+  const links = [];
+  for(const m of txt.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)){try{links.push({title:m[1].trim(), url:new URL(m[2], url).href});}catch(_){}}
+  return {found:true, url, title:first(/^#\s+/), summary:first(/^>\s?/), sections:lines.filter(l => /^##\s+/.test(l)).map(l => l.replace(/^##\s+/, '').trim()).slice(0, 30),
+    links:links.slice(0, 500), size:txt.length};
+}
 function buildResult(st){
   const {start, pages, links, alias, blocked, queue, opts} = st, resolve = u => alias.get(u) || u;
   const ids = new Map([...pages.keys()].map((u, i) => [u, String(i)])), inbound = new Map([...pages.keys()].map(u => [u, 0]));
@@ -828,7 +848,7 @@ function buildResult(st){
       blocked_by_robots:blocked.size, avg_response_ms:times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null,
       missing_title:ok.filter(p => !p.title).length, missing_description:ok.filter(p => !p.description).length,
       broken_links:broken.length, queue_left:queue.length},
-    nodes, edges, broken_links:broken.slice(0, 500), blocked:[...blocked].slice(0, 200)};
+    llms_txt:st.llms || null, nodes, edges, broken_links:broken.slice(0, 500), blocked:[...blocked].slice(0, 200)};
 }
 
 function logLine(kind, st, text, ms){
@@ -862,8 +882,24 @@ async function startCrawl(){
   const delayMs = Math.max(1500, (robots.delay || 0) * 1000);
   if(robots.delay) logLine('info', 'robots', 'Pede ' + robots.delay + ' s entre pedidos; usando ' + delayMs / 1000 + ' s');
 
+  // llms.txt: resumo opcional que o site publica para assistentes de IA (llmstxt.org)
+  let llms = {found:false, url:origin + '/llms.txt'};
+  if(allowed(robots, llms.url)){
+    crawl.status = 'Procurando llms.txt…'; refreshCrawl();
+    const lr = await politeGet(llms.url, delayMs);
+    if(lr && lr.ok && lr.status === 200 && !/html/i.test(lr.contentType || '') && (lr.body || '').trim()) llms = parseLlms(lr.body, llms.url);
+  }
+  logLine('info', 'llms', llms.found ? 'llms.txt encontrado: ' + (llms.title || 'sem título') + ' · ' + llms.links.length + ' links' : 'Este site não tem llms.txt');
+
   const st = {start, opts, delayMs, pages:new Map(), alias:new Map(), links:new Map(), blocked:new Set(), queue:[[start, 0]]};
+  st.llms = llms;
   const queued = new Set([start]);
+  if(opts.llms && llms.found){
+    let added = 0;
+    for(const l of llms.links){const u = norm(l.url, undefined, false);
+      if(u && same(u) && !queued.has(u) && !SKIP.test(new URL(u).pathname)){queued.add(u); st.queue.push([u, 1]); added++;}}
+    logLine('info', 'llms', added ? added + ' páginas do llms.txt adicionadas à fila' : 'os links do llms.txt não apontam para páginas HTML deste site');
+  }
   if(opts.sitemap){
     let added = 0;
     for(const sm of (robots.sitemaps.length ? robots.sitemaps : [origin + '/sitemap.xml']).slice(0, 3)){
@@ -949,9 +985,11 @@ function renderCrawl(p){
              mkSel('Profundidade', 'c-depth', [1, 2, 3, 4, 5], 'depth', v => v + (v === 1 ? ' clique' : ' cliques')));
   const lc = el('label', 'check'), ic = el('input'); Object.assign(ic, {type:'checkbox', id:'c-sitemap', checked:crawl.opts.sitemap, disabled:crawl.running});
   ic.onchange = () => crawl.opts.sitemap = ic.checked; lc.append(ic, 'Também usar o sitemap.xml do site');
+  const ll = el('label', 'check'), il = el('input'); Object.assign(il, {type:'checkbox', id:'c-llms', checked:!!crawl.opts.llms, disabled:crawl.running});
+  il.onchange = () => crawl.opts.llms = il.checked; ll.append(il, 'Também seguir os links do llms.txt');
   const go = el('button', 'go' + (crawl.running ? ' stop' : ''), crawl.running ? (crawl.stopReq ? 'Parando…' : 'Parar') : 'Começar a rastrear');
   go.type = 'submit'; go.disabled = crawl.running && crawl.stopReq;
-  f.append(lu, row, lc, go); p.append(f);
+  f.append(lu, row, lc, ll, go); p.append(f);
 
   if(crawl.running || crawl.done){
     const pr = el('div', 'prog'), bar = el('div'); bar.style.width = Math.min(100, crawl.done / crawl.opts.pages * 100) + '%'; pr.append(bar); p.append(pr);
@@ -1010,7 +1048,9 @@ function DEMO(){
   add('/infantil/contacao/', '/eventos/clube-de-leitura/'); add('/sobre/', '/sobre/voluntariado/'); add('/eventos/', '/infantil/contacao/');
   add('/acervo/', '/acervo/livros/lancamentos/'); add('/noticias/premio-leitura/', '/eventos/clube-de-leitura/');
   ['/contato/', '/horarios/'].forEach(p => add(p, '/servicos/acessibilidade/'));
-  return {site:base + '/', generated_at:'2026-10-11T14:30:00-03:00', nodes, edges, stats:{blocked_by_robots:2}, blocked:['/admin/', '/busca/']};
+  return {site:base + '/', generated_at:'2026-10-11T14:30:00-03:00', nodes, edges, stats:{blocked_by_robots:2}, blocked:['/admin/', '/busca/'],
+    llms_txt:{found:true, url:base + '/llms.txt', title:'Biblioteca Municipal Exemplo', summary:'Biblioteca pública com acervo de livros, periódicos e mapas antigos, eventos de leitura e serviços online.',
+      sections:['Serviços', 'Acervo', 'Eventos', 'Opcional'], links:Array.from({length:9}, (_, i) => ({title:'link ' + (i + 1), url:base + '/'})), size:1840}};
 }
 
 resize();
